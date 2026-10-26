@@ -195,6 +195,26 @@ try {
     $largeResult=['batch_id'=>900,'count'=>count($largeItems),'destination'=>[
         'address'=>'Липецкая область, Липецк, улица Передельческая, 5Б',
         'quality'=>'Точное совпадение дома','source_request_id'=>'345356'], 'items'=>$largeItems];
+    // Existing production rules were saved with CRLF and legacy HTML/plain formats.
+    // They must take the approved split/Markdown path without changing the stored rows.
+    foreach (['created'=>['Создан пакет переноса','html','ПЕРЕМЕЩЕНИЕ ЗАЯВОК'],
+              'reverted'=>['Возвращён пакет переноса','plain','ВОЗВРАТ ЗАЯВОК НА ИЗНАЧАЛЬНЫЕ АДРЕСА']] as $action=>[$oldTitle,$oldFormat,$newTitle]) {
+        $key='feo.transfer.'.$action;
+        $legacy=$oldTitle." №{{batch_id}}: {{batch_name}}\r\nЗаявок: {{request_count}}\r\nАдрес: {{address}}\r\nКачество координат: {{quality}}\r\nАвтор: {{author}}\r\n{{company}} · {{created_at}}\r\n{{comment}}";
+        $pdo->prepare('UPDATE max_event_rules SET message_template=?,message_format=? WHERE event_key=?')->execute([$legacy,$oldFormat,$key]);
+        $result=$largeResult; $result['batch_id']=$action==='created'?910:911; $result['count']=1; $result['items']=[$largeItems[0]];
+        $pdo->beginTransaction();
+        $ids=$enqueueMain->invoke($transferController,$pdo,$events,$key,$result,'Перемещение заявок','',$company,$weightActor);
+        $pdo->commit();
+        $ok(count($ids)===1,'Existing CRLF legacy '.$action.' rule produces one delivery');
+        $q=$pdo->prepare('SELECT message_text,message_format FROM max_event_deliveries WHERE id=?'); $q->execute([$ids[0]]); $delivery=$q->fetch(PDO::FETCH_ASSOC);
+        $ok(str_starts_with($delivery['message_text'],$newTitle) && !str_contains($delivery['message_text'],$oldTitle),'Existing CRLF legacy '.$action.' rule renders approved text');
+        $ok($delivery['message_format']==='markdown','Existing CRLF legacy '.$action.' rule sends Markdown');
+        $q=$pdo->prepare('SELECT message_template,message_format FROM max_event_rules WHERE event_key=?'); $q->execute([$key]); $stored=$q->fetch(PDO::FETCH_ASSOC);
+        $ok($stored['message_template']===$legacy && $stored['message_format']===$oldFormat,'Existing CRLF legacy '.$action.' settings remain untouched');
+        $events->saveRule(['event_key'=>$key,'is_enabled'=>1,'chat_config_id'=>1,
+            'message_template'=>MaxEventCatalog::event($key)['template'],'message_format'=>'plain'],11);
+    }
     $pdo->beginTransaction();
     $mainIds=$enqueueMain->invoke($transferController,$pdo,$events,'feo.transfer.created',$largeResult,'','',$company,$weightActor);
     $pdo->commit();
