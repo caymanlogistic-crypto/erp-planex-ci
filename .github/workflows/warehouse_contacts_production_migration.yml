@@ -1,0 +1,112 @@
+name: Warehouse Contacts Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact deployed canonical SHA
+        required: true
+        type: string
+      confirm_migration:
+        description: Type APPLY_WAREHOUSE_CONTACTS
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  statuses: read
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  EXPECTED_LEGACY_DB: spugovxsim_frega
+
+jobs:
+  migrate:
+    if: ${{ inputs.confirm_migration == 'APPLY_WAREHOUSE_CONTACTS' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact deployed canonical source and CI
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          php -l scripts/warehouse_contacts_production_migration.php
+          test -s database/migrations-legacy/001_warehouse_contacts.sql
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/warehouse-contacts-ci.json
+          SOURCE_SHA="$SOURCE_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          import json, os
+          rows=[r for r in json.load(open('/tmp/warehouse-contacts-ci.json')).get('workflow_runs',[])
+                if r.get('head_sha')==os.environ['SOURCE_SHA'] and r.get('head_branch')==os.environ['CANONICAL_BRANCH']]
+          if not rows or max(rows,key=lambda r:r.get('run_number',0)).get('conclusion')!='success':
+              raise SystemExit('Exact canonical CI PASS required')
+          PY
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/status" > /tmp/warehouse-contacts-deploy.json
+          python3 - <<'PY'
+          import json
+          rows=[s for s in json.load(open('/tmp/warehouse-contacts-deploy.json')).get('statuses',[])
+                if s.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success': raise SystemExit('Exact deployed SHA status required')
+          PY
+
+      - name: Configure isolated SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/warehouse_contacts_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/warehouse_contacts_key" "$HOME/.ssh/known_hosts"
+
+      - name: Inspect apply and verify warehouse contacts table
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/warehouse_contacts_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
+          sql_hash="$(sha256sum database/migrations-legacy/001_warehouse_contacts.sql | awk '{print $1}')"
+          base="PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' PLANEX_EXPECTED_LEGACY_DB='$EXPECTED_LEGACY_DB' PLANEX_SQL_SHA256='$sql_hash'"
+          script="$LIVE_ROOT/scripts/warehouse_contacts_production_migration.php"
+          "${remote[@]}" "$base WAREHOUSE_CONTACTS_MODE=check /usr/bin/php8.5 '$script'" | tee check.txt
+          grep -q '^WAREHOUSE_CONTACTS_CHECK_PASS$' check.txt
+          "${remote[@]}" "$base WAREHOUSE_CONTACTS_MODE=apply WAREHOUSE_CONTACTS_CONFIRM=APPLY_WAREHOUSE_CONTACTS /usr/bin/php8.5 '$script'" | tee apply.txt
+          grep -q '^WAREHOUSE_CONTACTS_APPLY_PASS$' apply.txt
+          "${remote[@]}" "$base WAREHOUSE_CONTACTS_MODE=verify /usr/bin/php8.5 '$script'" | tee verify.txt
+          grep -q '^WAREHOUSE_CONTACTS_VERIFY_PASS$' verify.txt
+
+      - name: Save migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warehouse-contacts-migration-${{ inputs.source_sha }}
+          path: |
+            check.txt
+            apply.txt
+            verify.txt
+          if-no-files-found: ignore
+          retention-days: 30
