@@ -50,6 +50,7 @@ Icon
 # Database migrations (tracked)
 !database/migrations/*.sql
 !database/migrations-local/*.sql
+!database/migrations-legacy/*.sql
 
 # Archives
 *.zip
