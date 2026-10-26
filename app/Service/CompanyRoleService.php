@@ -62,6 +62,7 @@ final class CompanyRoleService
         }
         unset($role);
 
+        $configuredPages = [];
         foreach ($pageRows as $row) {
             $roleId = (int) ($row['role_id'] ?? 0);
             $pageKey = (string) ($row['page_key'] ?? '');
@@ -69,6 +70,7 @@ final class CompanyRoleService
                 continue;
             }
             $roles[$roleIndexes[$roleId]]['pages'][$pageKey] = (bool) ($row['is_allowed'] ?? false);
+            $configuredPages[$roleId][$pageKey] = true;
         }
         foreach ($scopeRows as $row) {
             $roleId = (int) ($row['role_id'] ?? 0);
@@ -83,6 +85,11 @@ final class CompanyRoleService
         }
 
         foreach ($roles as &$role) {
+            $roleId = (int) $role['id'];
+            if (!isset($configuredPages[$roleId]['company.warehouses.addresses'])
+                && ($role['pages']['company.warehouses.stock'] ?? false)) {
+                $role['pages']['company.warehouses.addresses'] = true;
+            }
             if (($role['system_key'] ?? null) === self::OWNER_SYSTEM_KEY) {
                 $role['default_page_key'] = 'company.dashboard';
                 $role['pages'] = array_fill_keys($pageKeys, true);
@@ -251,6 +258,12 @@ final class CompanyRoleService
             );
             foreach ($pagePermissions as $pageKey => $allowed) {
                 $pageInsert->execute([':role_id' => $roleId, ':page_key' => $pageKey, ':is_allowed' => $allowed ? 1 : 0]);
+            }
+            // Existing roles have no row for this newly configurable page.
+            // A saved unchecked box needs an explicit denial to end inheritance.
+            $addressKey = 'company.warehouses.addresses';
+            if (isset($allowedKeyMap[$addressKey]) && !array_key_exists($addressKey, $pagePermissions)) {
+                $pageInsert->execute([':role_id' => $roleId, ':page_key' => $addressKey, ':is_allowed' => 0]);
             }
 
             $this->pdo->prepare('DELETE FROM role_data_scopes WHERE role_id = ?')->execute([$roleId]);

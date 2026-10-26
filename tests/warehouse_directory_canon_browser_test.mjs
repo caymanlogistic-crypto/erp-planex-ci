@@ -39,6 +39,8 @@ try {
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.goto(`${origin}/company/warehouses/addresses?role=${role}`);
     await page.waitForSelector('[data-registry-ready="true"]');
+    assert.equal(await page.locator('.nav-sub-item[href="/company/warehouses/addresses"]').count(),1);
+    if(role==='logist') assert.equal(await page.locator('.nav-sub-item[href="/company/warehouses/stock"]').count(),0);
     const bounds=await page.evaluate(()=>{
       const head=document.querySelector('[data-warehouse-directory] .registry-ui-head').getBoundingClientRect();
       const card=document.querySelector('[data-warehouse-directory] .registry-ui-card').getBoundingClientRect();

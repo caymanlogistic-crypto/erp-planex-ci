@@ -11,7 +11,7 @@ $_SESSION = ['role_code'=>$role === 'owner' ? 'company_owner' : 'logist', 'compa
     'user_id'=>11, 'account_id'=>3, 'user_name'=>'Тестовый пользователь', 'membership_id'=>$role === 'owner' ? 11 : 12];
 App\Security\AccessRuntime::setCurrent($role === 'owner'
     ? App\Security\EffectiveAccess::systemOwner(11, 7, array_column(App\Security\PageRegistry::companyPages(), 'key'))
-    : App\Security\EffectiveAccess::member(12, 7, ['company.warehouses.stock'=>true], [], 'logist'));
+    : App\Security\EffectiveAccess::member(12, 7, ['company.warehouses.addresses'=>true], [], 'logist'));
 $company = ['id'=>7, 'name'=>'ООО «ПЛАНЭКС»', 'status'=>'active'];
 $db = new class([]) extends App\Core\Database { public function connection(): PDO { throw new RuntimeException('Fixture has no database'); } };
 $pageTitle = 'Адреса складов';

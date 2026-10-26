@@ -9,6 +9,7 @@ final class MembershipAccessSnapshot
      * @param array<string, 'allow'|'deny'|'inherit'> $pageOverrides
      * @param array<string, 'all'|'own'|'none'> $roleDataScopes
      * @param array<string, 'all'|'own'|'none'|'inherit'> $dataScopeOverrides
+     * @param list<string> $configuredRolePageKeys
      */
     public function __construct(
         public readonly int $membershipId,
@@ -21,6 +22,7 @@ final class MembershipAccessSnapshot
         public readonly array $roleDataScopes,
         public readonly array $dataScopeOverrides,
         public readonly string $compatibilityRoleCode = 'custom_role',
+        public readonly array $configuredRolePageKeys = [],
     ) {
     }
 }

@@ -61,7 +61,7 @@ if ($command === 'fingerprint') {
     foreach (['companies','warehouses','warehouse_contacts','drivers','flights','warehouse_movements','waste_trips','waste_trip_requests','feo_requests'] as $table) $data[$table]=$pdo->query('SELECT * FROM '.$table.' ORDER BY 1')->fetchAll(PDO::FETCH_ASSOC);
     echo hash('sha256', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)); exit;
 }
-if ($command !== 'render') throw new RuntimeException('Unknown command');
+if (!in_array($command, ['render','save-denied'], true)) throw new RuntimeException('Unknown command');
 $role = $argv[2] ?? '';
 if (!in_array($role,['owner','logist','denied'],true)) throw new RuntimeException('Unknown role');
 $uri = '/company/warehouses/addresses';
@@ -70,7 +70,7 @@ $_SESSION=['user_id'=>$role==='owner'?1:2,'account_id'=>$role==='owner'?101:102,
     'company_id'=>7,'role_code'=>$role==='owner'?'company_owner':'logist','full_name'=>'Тестовый пользователь','auth_type'=>'company_user'];
 $registry = new App\Security\PageRegistry();
 $access = $role==='owner' ? App\Security\EffectiveAccess::systemOwner(11,7,$registry->pageKeys())
-    : App\Security\EffectiveAccess::member(12,7,['company.warehouses.stock'=>$role==='logist'],[], 'logist');
+    : App\Security\EffectiveAccess::member(12,7,['company.warehouses.addresses'=>$role==='logist'],[], 'logist');
 App\Security\AccessRuntime::setCurrent($access);
 if (!$access->canAccessPage('company.warehouses.addresses')) {
     echo json_encode(['status'=>403,'html'=>'Доступ запрещён'],JSON_UNESCAPED_UNICODE); exit;
@@ -82,6 +82,14 @@ putenv('LEGACY_FLIGHTS_DB_USERNAME='.$user);
 putenv('LEGACY_FLIGHTS_DB_PASSWORD='.$password);
 $router = new App\Http\Router($registry);
 require BASE_PATH.'/app/Http/Routes/company_linear_trips.php';
+if ($command === 'save-denied') {
+    $_SERVER['REQUEST_METHOD'] = 'POST';
+    $_POST = ['warehouse_id'=>7, 'address'=>'Неавторизованное изменение'];
+    ob_start();
+    $router->dispatch('POST', $uri);
+    echo json_encode(['status'=>http_response_code() ?: 200, 'body'=>(string)ob_get_clean()], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    exit;
+}
 ob_start(); $captureLevel=ob_get_level();
 register_shutdown_function(static function() use ($captureLevel): void {
     while (ob_get_level() > $captureLevel) ob_end_flush();

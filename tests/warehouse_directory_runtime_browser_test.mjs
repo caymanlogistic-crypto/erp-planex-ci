@@ -13,6 +13,10 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const fixture=(...args)=>execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/warehouse_directory_runtime.php'),...args],{encoding:'utf8',env:{...process.env,APP_ENV:'test'},maxBuffer:8*1024*1024});
 assert.equal(fixture('seed'),'SEEDED');
 const before=fixture('fingerprint');
+const deniedSave=JSON.parse(fixture('save-denied','logist'));
+assert.equal(deniedSave.status,403);
+assert.match(deniedSave.body,/Доступ запрещён/);
+assert.equal(fixture('fingerprint'),before,'logist save attempt changed warehouse data');
 const rendered=Object.fromEntries(['owner','logist','denied'].map(role=>[role,JSON.parse(fixture('render',role))]));
 assert.equal(rendered.denied.status,403);
 assert.ok(!rendered.denied.html.includes('Склад Север'));
@@ -49,6 +53,8 @@ try {
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.goto(origin+'/company/warehouses/addresses');
     await page.waitForSelector('[data-registry-ready="true"]');
+    assert.equal(await page.locator('.nav-sub-item[href="/company/warehouses/addresses"]').count(),1);
+    if(actor==='logist') assert.equal(await page.locator('.nav-sub-item[href="/company/warehouses/stock"]').count(),0);
     const bounds=await page.evaluate(()=>{
       const head=document.querySelector('[data-warehouse-directory] .registry-ui-head').getBoundingClientRect();
       const card=document.querySelector('[data-warehouse-directory] .registry-ui-card').getBoundingClientRect();
