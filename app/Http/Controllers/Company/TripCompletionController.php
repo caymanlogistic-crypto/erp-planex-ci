@@ -45,7 +45,6 @@ final class TripCompletionController
             [$company,$service]=$this->context();
             if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (150).');
             $all=$service->trips('',false);
-            if ($this->reviewerMode) $all=array_values(array_filter($all,static fn(array $row):bool=>$row['review_status']!=='work'));
             $work=array_values(array_filter($all,fn(array $row):bool=>$row['review_status']===($this->reviewerMode?'review':'work')));
             $metrics=[
                 'trips'=>count($work),
@@ -367,7 +366,6 @@ final class TripCompletionController
     private function visibleTrip(TripCompletionService $service,int $tripId): array
     {
         $trip=$service->trip($tripId);
-        if ($this->reviewerMode && $trip['review_status']==='work') throw new DomainException('Рейс ещё не передан на проверку.');
         return $trip;
     }
 
