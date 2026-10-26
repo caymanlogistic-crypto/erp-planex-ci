@@ -25,11 +25,12 @@ final class FeoWeightBatchController
         $pageTitle = 'Изменение веса заявок';
         $pageContext = 'Заявки ФЭО › '.$pageTitle;
         $page = max(1, min(100000, (int)($_GET['page'] ?? 1)));
-        $batches = []; $dbError = null;
+        $batches = []; $batchIndexItems = []; $dbError = null;
         try {
             [, $pdo] = $this->context();
             if (!$this->service->ready($pdo)) throw new RuntimeException('Инструмент ожидает обновления базы компании (162).');
             $batches = $this->service->batches($pdo, $page);
+            $batchIndexItems = $this->service->batchIndexItems($pdo, $batches);
         } catch (\Throwable $e) { $dbError = $e->getMessage(); }
         $config = $this->config; $db = $this->db;
         $topbarCrumbs = [['label'=>'Заявки ФЭО','url'=>null], ['label'=>$pageTitle,'url'=>null]];

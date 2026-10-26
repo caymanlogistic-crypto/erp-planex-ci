@@ -114,7 +114,7 @@
 .registry-ui-toolbar #rp-search::placeholder {color:#817b72;opacity:1}
 @media(max-width:1100px){.registry-ui-head.page-head {height:auto;min-height:58px;flex-wrap:wrap}.registry-ui-head .page-head-left {flex:1 1 350px}}
 /* Keep dense headers and the right control group within the intermediate shell. */
-@media(min-width:701px) and (max-width:1099px){
+@media(min-width:701px) and (max-width:1100px){
   .registry-ui-head .page-head-actions:has(> :nth-child(3)){flex:1 1 100%;width:100%;max-width:100%;margin-left:0;flex-wrap:wrap;justify-content:flex-start}
   .registry-ui-toolbar.table-toolbar > .toolbar-right{flex-basis:100%;flex-wrap:wrap}
   .registry-ui-toolbar.table-toolbar > .toolbar-right > .registry-ui-reset[hidden]{display:inline-flex!important;visibility:hidden;pointer-events:none}

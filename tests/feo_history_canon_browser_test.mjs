@@ -60,15 +60,22 @@ try{
      assert.equal(await page.locator('[data-history-count]').innerText(),'4');
      assert.equal(await page.locator('[data-weight-mode]').inputValue(),'net');
    }else{
-     await assertRegistrySearch(page,{rowSelector:'[data-batch-row]',probes:[{query:'#18',ids:['18']},{query:'#17',ids:['17']}],resolveActual:async p=>p.locator('[data-batch-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId).sort())},id);
+     assert.equal(await page.locator('[data-show-returned]').isChecked(),false);
+     assert.equal(await page.locator('[data-batch-row]:visible').count(),62,'returned weights hidden by default');
+     await assertRegistrySearch(page,{rowSelector:'[data-batch-row]',probes:[{query:'#18',ids:['18']},{query:'100001',ids:['18']}],resolveActual:async p=>p.locator('[data-batch-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId).sort())},id);
      await page.locator('[data-history-search]').fill('#18');
      const row=page.locator('[data-batch-row]:visible');
      assert.equal(await row.count(),1);
-     await assertRegistryRows(page,{rowSelector:'[data-batch-row]:visible',rows:[{id:18,cells:[['#18'],['Перемещение на склад'],['12'],['18.10.2026 15:30'],['Владимир С.'],['Применён'],['ПодробнееВернуть блок']]}]},id);
-     await page.locator('[data-history-search]').fill('обрезку');
-     assert.equal(await page.locator('[data-batch-row]:visible').count(),1,'search uses full title behind 50-character preview');
+     await assertRegistryRows(page,{rowSelector:'[data-batch-row]:visible',rows:[{id:18,cells:[['#18'],[Array.from({length:12},(_,i)=>String(100001+i)).join(', ')],['12'],['—'],['0 кг'],['18.10.2026 15:30'],['Владимир С.']]}]},id);
+     await page.locator('.registry-ui-toolbar .lab-reference-trigger').click();
+     await page.getByRole('option',{name:'Брутто'}).click();
+     assert.equal(await row.locator('[data-total-before]').innerText(),'1 500 кг');
+     assert.equal(await row.locator('[data-total-after]').innerText(),'2 400 кг');
+     await page.locator('[data-show-returned]').check();
+     await assertRegistrySearch(page,{rowSelector:'[data-batch-row]',probes:[{query:'#17',ids:['17']}],resolveActual:async p=>p.locator('[data-batch-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId).sort())},id);
      await page.locator('.registry-ui-reset').click();
-     assert.equal(await page.locator('[data-batch-row]:visible').count(),72,'reset restores history');
+     assert.equal(await page.locator('[data-batch-row]:visible').count(),62,'reset restores default filter');
+     assert.equal(await page.locator('[data-weight-mode]').inputValue(),'net');
    }
    assert.deepEqual(errors,[],`${id} page errors`);
    await page.close();

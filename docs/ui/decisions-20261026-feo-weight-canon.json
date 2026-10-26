@@ -1,0 +1,37 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "feo-weight-complete-page-20261026",
+  "date": "2026-10-26",
+  "status": "OWNER_DELEGATED_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "instruction": "После выпуска переноса полностью доработать страницу изменения веса: общую таблицу, попапы, алерты и все состояния по принятому канону; работать автономно, без вопросов, тщательно проверить до публикации.",
+    "supersedes": "docs/ui/decisions-20261024-feo-weight-popups.json: limitation preserving the old seven-column history registry and popup wording overridden by this later complete-page instruction",
+    "review_gate": "Independent ROOT visual review of populated/empty registry, editor, validation, history, final confirmation and responsive states before publication."
+  },
+  "scope": ["/erpv2/company/feo/requests/weights — registry, create, editor, read-only history, final confirmation, notifications"],
+  "inherits": [
+    "docs/ui/decisions-20261024-feo-weight-popups.json: weight business behavior, NULL/0 and shared editor roles",
+    "docs/ui/decisions-20261025-feo-transfer-v007.json: later approved history title, table spacing, reading and confirmation roles, count removal and footer behavior",
+    "docs/ui/decisions-20261023-toolbar.json: shared toolbar order and reset behavior",
+    "docs/ui/decisions-20261026-notification-top-center.json: shared notification timing and placement"
+  ],
+  "visible_role_provenance": {
+    "page_head": "Existing registry_ui_head.php and approved primary button; retained weight page heading, summary and Tabler arrows-exchange icon from 2026-10-24 approved weight page.",
+    "toolbar": "Shared registry-ui-toolbar, found-label, filter-sep, registry-ui-checkbox, registry-ui-reset, toolbar-select and registry-ui-search. The returned-block visibility meaning and unchecked default, net/gross selection and reset order follow the approved transfer registry. Weight-specific text is the existing weight business vocabulary.",
+    "main_table": "Shared registry-ui-table--placement/--placement-blocks row, header, ID, primary and missing roles. The seven columns are ID, Заявки, Заявок, Было, Стало, Дата, Ответственный; ID/full request IDs/date/author are already approved on transfer history, and Было/Стало plus independent net/gross weights come from the approved weight editor. The select names the displayed weight kind. ID keyboard activation and row double-click follow the approved transfer history. Returned rows use the existing registry-ui-muted state and remain hidden by default.",
+    "create": "Existing approved weight create flow, 96px shared field-textarea, automatic lookup, five-column shared compact editor table, red field errors, blank=NULL and 0 kg as a real value. The later transfer v007 removes the nonessential count above the table; duplicate summary is shown only when duplicates exist. No new local component.",
+    "history": "Shared registry-ui-modal--reading, #ID title, page-eyebrow label, complete request list and compact bordered five-column weight table. Existing weight business values remain read-only. The later transfer v007 removes the count above the table. Footer retains the weight action name Отменить изменение веса and shared primary button for applied blocks; returned blocks have only Отменить.",
+    "confirmation": "Shared registry-ui-modal--confirmation at 640px, one plain sentence with every bold request ID and shared red btn-danger Выполнить возврат, plus Отменить. The later transfer v007 removed the extra conflict warning from visible text; server conflict protection remains.",
+    "notifications": "Shared PlanexNotifications only for brief page outcomes and fetch errors; semantic success/warning/danger tones and five-second dismissal from 2026-10-26 notification center. Field errors stay adjacent to their field, using existing field-msg is-error; blocking database failure stays in page.",
+    "responsive": "Approved registry/table horizontal scroll and shared modal internal 300px table scroll, no page-level horizontal overflow. Subject CSS defines only seven weight-column widths, with no new font, color, border, surface or control skin."
+  },
+  "data_contract": "Read-only batched index joins feo_weight_items for full ID lists and historic before/after totals. Net/gross are summed independently in kg; any missing value makes that total unknown (neutral dash), while known zero is 0 кг. No production schema/data writes or change to create/revert transaction.",
+  "implementation": {
+    "view": "app/View/pages/company_feo_weight_batches.php",
+    "behavior": "public/assets/js/feo-weights.js",
+    "read_service": "app/Service/FeoWeightBatchService.php::batchIndexItems",
+    "shared_style": "public/assets/css/registry-components.css",
+    "subject_geometry": "public/assets/css/feo-transfers.css"
+  }
+}

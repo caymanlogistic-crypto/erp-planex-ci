@@ -826,7 +826,7 @@
       "adaptation_status": "current_20261018",
       "route": "/erpv2/company/feo/requests/weights",
       "view": "app/View/pages/company_feo_weight_batches.php",
-      "popup_decision": "docs/ui/decisions-20261024-feo-weight-popups.json",
+      "popup_decision": "docs/ui/decisions-20261026-feo-weight-canon.json",
       "popup_style_owner": "public/assets/css/registry-components.css",
       "popup_browser_test": "tests/feo_weights_browser_test.mjs",
       "popup_service_test": "tests/feo_weight_batches_mysql_test.php",
@@ -838,16 +838,15 @@
         "role": "registry.page-head",
         "pack": "@tabler/icons"
       },
-      "reference_select": false,
+      "reference_select": true,
       "sticky": true,
       "asset_owner": "app/View/pages/company_feo_weight_batches.php",
       "browser_test": "tests/feo_history_canon_browser_test.mjs",
       "runtime_browser_test": "tests/feo_history_runtime_browser_test.mjs",
       "data_roles": [
         "primary",
-        "name",
         "id",
-        "status"
+        "missing"
       ],
       "table_surfaces": [
         {

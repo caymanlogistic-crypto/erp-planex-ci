@@ -36,7 +36,7 @@ try {
     assert.equal(before.viewportOverflow,false,`${width}: viewport overflow before search`);
     assert.equal(before.mainOverflow,false,`${width}: main overflow before search`);
     assert.equal(await page.locator('.registry-ui-reset').isVisible(),false,`${width}: reset initially hidden`);
-    assert.equal(await page.locator('[data-history-count]').innerText(),'72',`${width}: original count`);
+    assert.equal(await page.locator('[data-history-count]').innerText(),'62',`${width}: active blocks by default`);
     await page.locator('[data-history-search]').fill('#18');
     assert.equal(await page.locator('[data-batch-row]:visible').count(),1,`${width}: filtered rows`);
     assert.equal(await page.locator('[data-history-count]').innerText(),'1',`${width}: filtered count`);
@@ -58,9 +58,9 @@ try {
     assert.equal(await page.locator('.registry-ui-reset').evaluate(node => getComputedStyle(node).outlineStyle),'solid',`${width}: reset focus`);
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('[data-history-search]').inputValue(),'');
-    assert.equal(await page.locator('[data-history-count]').innerText(),'72');
+    assert.equal(await page.locator('[data-history-count]').innerText(),'62');
     assert.equal(await page.locator('.registry-ui-reset').isVisible(),false);
-    assert.equal(await page.locator('[data-batch-row]:visible').count(),72);
+    assert.equal(await page.locator('[data-batch-row]:visible').count(),62);
     assert.deepEqual(errors,[],`${width}: page errors`);
     await page.close();
   }

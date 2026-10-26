@@ -129,6 +129,41 @@ final class FeoWeightBatchService
         return $pdo->query("SELECT * FROM feo_weight_batches ORDER BY id DESC LIMIT 50 OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /** Complete request IDs and historic totals for the visible registry page. */
+    public function batchIndexItems(PDO $pdo, array $batches): array
+    {
+        if ($batches === []) return [];
+        $ids = array_map(static fn(array $batch): int => (int)$batch['id'], $batches);
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $query = $pdo->prepare("SELECT batch_id,zayavka_id,before_netto,before_brutto,after_netto,after_brutto
+            FROM feo_weight_items WHERE batch_id IN ($marks) ORDER BY batch_id DESC,zayavka_id");
+        $query->execute($ids);
+        $result = [];
+        foreach ($ids as $id) {
+            $result[$id] = ['ids'=>[], 'before_net_kg'=>0.0, 'after_net_kg'=>0.0,
+                'before_gross_kg'=>0.0, 'after_gross_kg'=>0.0];
+        }
+        $complete = [];
+        foreach ($ids as $id) $complete[$id] = array_fill_keys(['before_net','after_net','before_gross','after_gross'], true);
+        foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $item) {
+            $id = (int)$item['batch_id'];
+            $result[$id]['ids'][] = (string)$item['zayavka_id'];
+            foreach (['before_net'=>'before_netto', 'after_net'=>'after_netto',
+                'before_gross'=>'before_brutto', 'after_gross'=>'after_brutto'] as $kind=>$field) {
+                if ($item[$field] === null) $complete[$id][$kind] = false;
+                else $result[$id][$kind.'_kg'] += (float)$item[$field] * 1000;
+            }
+        }
+        foreach ($result as $id=>&$summary) {
+            foreach (['before_net','after_net','before_gross','after_gross'] as $kind) {
+                $summary[$kind.'_kg'] = $summary['ids'] !== [] && $complete[$id][$kind]
+                    ? round($summary[$kind.'_kg'], 1) : null;
+            }
+        }
+        unset($summary);
+        return $result;
+    }
+
     public function items(PDO $pdo, int $batchId): array
     {
         $query = $pdo->prepare('SELECT zayavka_id,request_row_id,before_netto,before_brutto,after_netto,after_brutto,legacy_snapshot_json FROM feo_weight_items WHERE batch_id=? ORDER BY zayavka_id');

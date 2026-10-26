@@ -49,8 +49,14 @@ try{
      await page.getByRole('option',{name:'Брутто'}).click();
      assert.equal(await page.locator('[data-registry-row-id="18"] [data-total-weight]').innerText(),'18 000 кг');
    }else{
-     assert.ok(await page.locator('[data-registry-row-id="18"] [data-detail]').count(),'detail action remains available');
-     assert.ok(await page.locator('[data-registry-row-id="18"] [data-revert]').count(),'revert action remains available');
+     assert.equal(await page.locator('[data-registry-row-id="18"] [data-detail][role="button"][tabindex="0"]').count(),1,'ID opens weight history');
+     assert.match(await page.locator('[data-registry-row-id="18"]').innerText(),/100001.*100012/s,'complete request list from weight items');
+     assert.equal(await page.locator('[data-registry-row-id="18"] [data-total-before]').innerText(),'15 000 кг');
+     assert.equal(await page.locator('[data-registry-row-id="18"] [data-total-after]').innerText(),'15 600 кг');
+     await page.locator('.registry-ui-toolbar .lab-reference-trigger').click();
+     await page.getByRole('option',{name:'Брутто'}).click();
+     assert.equal(await page.locator('[data-registry-row-id="18"] [data-total-before]').innerText(),'18 000 кг');
+     assert.equal(await page.locator('[data-registry-row-id="18"] [data-total-after]').innerText(),'20 400 кг');
    }
    await page.locator('[data-history-search]').fill('несуществующий блок');
    assert.equal(await page.locator('[data-batch-row]:visible').count(),0,'real page search filters rows');
