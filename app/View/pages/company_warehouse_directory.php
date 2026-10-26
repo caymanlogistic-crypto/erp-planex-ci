@@ -8,6 +8,7 @@ $contactCount = static function (int $count): string {
     return $count.' '.$word;
 };
 ?>
+<link rel="stylesheet" href="<?= app_url('/assets/css/warehouse-directory.css') ?>?v=<?= filemtime(base_path('public/assets/css/warehouse-directory.css')) ?>">
 <link rel="stylesheet" href="<?= app_url('/assets/css/registry-components.css') ?>?v=<?= filemtime(base_path('public/assets/css/registry-components.css')) ?>">
 <div data-warehouse-directory>
     <?php
@@ -30,13 +31,14 @@ $contactCount = static function (int $count): string {
             </div>
         </div>
         <div class="table-scroll"><table class="table registry-ui-table registry-ui-data">
-            <colgroup><col class="registry-ui-id"><col><col><col></colgroup>
-            <thead><tr><th class="registry-ui-id">ID</th><th>Склад</th><th>Адрес</th><th>Контакты</th></tr></thead>
+            <colgroup><col class="registry-ui-id"><col class="warehouse-directory-name"><col><col class="warehouse-directory-contacts"><col class="warehouse-directory-requests"><col class="warehouse-directory-weight"></colgroup>
+            <thead><tr><th class="registry-ui-id">ID</th><th>Склад</th><th>Адрес</th><th>Контакты</th><th>Заявки на складе</th><th>Вес на складе, кг</th></tr></thead>
             <tbody>
             <?php foreach ($warehouses as $warehouse):
                 $id = (int)$warehouse['id'];
                 $contacts = $warehouse['contacts'];
-                $search = (string)$warehouse['name'].' '.(string)$warehouse['address'];
+                $formattedWeight = number_format((int)$warehouse['weight_kg'], 0, ',', ' ');
+                $search = (string)$warehouse['name'].' '.(string)$warehouse['address'].' '.(int)$warehouse['request_count'].' '.$formattedWeight;
                 foreach ($contacts as $contact) $search .= ' '.implode(' ', array_map('strval', array_values($contact)));
             ?>
                 <tr data-warehouse-row data-registry-row-id="<?= $id ?>" data-registry-search="<?= e($search) ?>">
@@ -44,9 +46,11 @@ $contactCount = static function (int $count): string {
                     <td><span class="registry-ui-name"><?= e((string)$warehouse['name']) ?></span></td>
                     <td><span class="registry-ui-primary"><?= $warehouse['address'] !== '' ? e((string)$warehouse['address']) : '<span class="registry-ui-missing">—</span>' ?></span></td>
                     <td><span class="registry-ui-secondary"><?= e($contactCount(count($contacts))) ?></span></td>
+                    <td><span class="registry-ui-primary"><?= (int)$warehouse['request_count'] ?></span></td>
+                    <td><span class="registry-ui-primary"><?= e($formattedWeight) ?> кг</span></td>
                 </tr>
             <?php endforeach; ?>
-            <?php if ($warehouses === []): ?><tr data-warehouse-empty><td colspan="4"><span class="registry-ui-secondary">Склады не найдены.</span></td></tr><?php endif; ?>
+            <?php if ($warehouses === []): ?><tr data-warehouse-empty><td colspan="6"><span class="registry-ui-secondary">Склады не найдены.</span></td></tr><?php endif; ?>
             </tbody>
         </table></div>
     </div>
@@ -62,8 +66,11 @@ $contactCount = static function (int $count): string {
             <input type="hidden" name="warehouse_id" value="<?= $id ?>">
             <input type="hidden" name="expected_address" value="<?= e((string)$warehouse['address']) ?>">
             <input type="hidden" name="expected_contacts_hash" value="<?= e(hash('sha256', json_encode($contacts, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))) ?>">
+            <input type="hidden" name="expected_coordinates_hash" value="<?= e(hash('sha256', json_encode([$warehouse['latitude'], $warehouse['longitude']], JSON_THROW_ON_ERROR))) ?>">
             <div class="modal-body"><div class="registry-ui-modal-grid">
                 <label class="field"><span class="field-label">Полный адрес</span><input class="field-input" name="address" maxlength="500" required value="<?= e((string)$warehouse['address']) ?>"></label>
+                <label class="field"><span class="field-label">Широта</span><input class="field-input" name="latitude" type="text" inputmode="decimal" value="<?= e((string)($warehouse['latitude'] ?? '')) ?>" aria-label="Широта склада"></label>
+                <label class="field"><span class="field-label">Долгота</span><input class="field-input" name="longitude" type="text" inputmode="decimal" value="<?= e((string)($warehouse['longitude'] ?? '')) ?>" aria-label="Долгота склада"></label>
                 <div class="field"><span class="field-label">Контакты склада</span><div class="registry-ui-modal-grid" data-warehouse-contacts>
                     <?php foreach ($contacts as $index => $contact): ?>
                     <fieldset class="registry-ui-modal-grid" data-warehouse-contact>
@@ -82,6 +89,7 @@ $contactCount = static function (int $count): string {
         <?php else: ?>
         <div class="modal-body"><div class="registry-ui-modal-grid">
             <div class="field"><span class="field-label">Полный адрес</span><span class="registry-ui-modal-text"><?= $warehouse['address'] !== '' ? e((string)$warehouse['address']) : '—' ?></span></div>
+            <div class="field"><span class="field-label">Координаты</span><span class="registry-ui-modal-text"><?= $warehouse['latitude'] !== null ? e($warehouse['latitude'].', '.$warehouse['longitude']) : '—' ?></span></div>
             <div class="field"><span class="field-label">Контакты склада</span>
                 <?php if ($contacts === []): ?><span class="registry-ui-modal-text">Контакты не указаны.</span><?php endif; ?>
                 <?php foreach ($contacts as $contact): ?><div class="registry-ui-modal-grid">

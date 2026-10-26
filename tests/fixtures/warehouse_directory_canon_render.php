@@ -27,6 +27,14 @@ $warehouses = [
 for ($id=9; $id<58; $id++) $warehouses[] = ['id'=>$id, 'name'=>'Склад '.$id,
     'address'=>'Регион, Промышленная улица, '.$id, 'contacts'=>[]];
 $warehouses[] = ['id'=>58, 'name'=>'Склад без адреса', 'address'=>'', 'contacts'=>[]];
+foreach ($warehouses as &$warehouse) {
+    $warehouse += ['latitude'=>null, 'longitude'=>null, 'request_count'=>0, 'weight_kg'=>0];
+}
+unset($warehouse);
+$warehouses[0]['latitude'] = '55.75';
+$warehouses[0]['longitude'] = '37.62';
+$warehouses[0]['request_count'] = 2;
+$warehouses[0]['weight_kg'] = 3750;
 ob_start();
 require BASE_PATH.'/app/View/pages/company_warehouse_directory.php';
 $content = (string)ob_get_clean();

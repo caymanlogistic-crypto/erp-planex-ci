@@ -7,7 +7,9 @@
     "Руководитель редактирует адрес и контакты, логисты просматривают.",
     "У склада может быть несколько контактов: ФИО, должность, телефон, email.",
     "Реестр показывает краткую сводку контактов; полный список открыт в попапе.",
-    "Компактный попап шириной до 640 px; системная иконка шапки map-pin."
+    "Компактный попап шириной до 640 px; системная иконка шапки map-pin.",
+    "OWNER 26.10.2026: двойное нажатие на строку открывает редактирование адреса, широты, долготы и одного или нескольких контактов для руководителя.",
+    "OWNER 26.10.2026: в общем списке видны Заявки на складе и Вес на складе; значения совпадают с текущим остатком складского журнала."
   ],
   "approved_reuse": {
     "page_head": "registry-ui-head; app/View/partials/registry_ui_head.php",
@@ -16,7 +18,9 @@
     "modal_body": "registry-ui-modal-grid and system field-input fields",
     "typography": "IBM Plex Sans; ordinary 12/500, name 12/600, secondary contacts 11/500",
     "colors": "Existing registry-components.css and erp-ui.css semantic palette only",
-    "address": "Full text with natural wrapping in registry and dialog"
+    "address": "Full text with natural wrapping in registry and dialog",
+    "stock_values": "Reuse WarehouseStockService::load current request_count and weight_kg; ordinary registry-ui-primary typography",
+    "coordinates": "Existing system field-input controls for latitude and longitude in the approved 640 px dialog; no new palette"
   },
-  "storage_boundary": "Existing warehouse address remains in the warehouse row; contacts use a new table linked to its ID. Production schema and data writes require separate authorization."
+  "storage_boundary": "Existing warehouse address remains in the warehouse row; contacts and coordinates use the existing warehouse_contacts row linked to its ID. The additive coordinate columns need separate task-specific OWNER authorization for production schema migration."
 }

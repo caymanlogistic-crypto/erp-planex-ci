@@ -35,12 +35,12 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
 const origin=`http://127.0.0.1:${server.address().port}`;
 const expectedRows=[
-  {id:7,cells:[['#7'],['Склад Север'],['Москва, Складская улица, 1, корпус 2'],['2 контакта']]},
-  {id:8,cells:[['#8'],['Склад Юг'],['Тула, Южная улица, 2'],['0 контактов']]},
+  {id:7,cells:[['#7'],['Склад Север'],['Москва, Складская улица, 1, корпус 2'],['2 контакта'],['2'],['3 750 кг']]},
+  {id:8,cells:[['#8'],['Склад Юг'],['Тула, Южная улица, 2'],['0 контактов'],['0'],['0 кг']]},
   ...Array.from({length:49},(_,index)=>{
-    const id=index+9;return {id,cells:[[`#${id}`],[`Склад ${id}`],[`Регион, Промышленная улица, ${id}`],['0 контактов']]};
+    const id=index+9;return {id,cells:[[`#${id}`],[`Склад ${id}`],[`Регион, Промышленная улица, ${id}`],['0 контактов'],['0'],['0 кг']]};
   }),
-  {id:58,cells:[['#58'],['Склад без адреса'],['—'],['0 контактов']]},
+  {id:58,cells:[['#58'],['Склад без адреса'],['—'],['0 контактов'],['0'],['0 кг']]},
 ];
 try {
   for(actor of ['owner','logist']) for(const width of [390,1280,1920,3840]){
@@ -64,32 +64,43 @@ try {
     await assertRegistryRows(page,{rowSelector:'[data-warehouse-row]',rows:expectedRows,forbidden:['Чужой склад']},`warehouse-addresses ${actor}`);
     await assertRegistryScroll(page,`warehouse-addresses ${actor} ${width}`);
     await assertRegistrySearch(page,{rowSelector:'[data-warehouse-row]',probes:[
-      {query:'Петров',ids:[7]},{query:'Тула',ids:[8]},{query:'Склад 10',ids:[10]},{query:'не существует',ids:[]}
+      {query:'Петров',ids:[7]},{query:'Тула',ids:[8]},{query:'3 750',ids:[7]},{query:'Склад 10',ids:[10]},{query:'не существует',ids:[]}
     ],resolveActual:async p=>p.locator('[data-warehouse-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId).sort())},`warehouse-addresses ${actor}`);
     await page.locator('[data-registry-field="query"]').fill('Петров');
     assert.deepEqual(await page.locator('[data-warehouse-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId)),['7']);
     await page.locator('.registry-ui-reset').click();
     assert.equal(await page.locator('[data-warehouse-row]:visible').count(),52);
-    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-name').click();
+    if(process.env.PLANEX_WAREHOUSE_SCREENSHOT_DIR && actor==='owner'){
+      mkdirSync(process.env.PLANEX_WAREHOUSE_SCREENSHOT_DIR,{recursive:true});
+      await page.screenshot({path:path.join(process.env.PLANEX_WAREHOUSE_SCREENSHOT_DIR,`warehouse-register-${width}.png`),fullPage:false});
+    }
+    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-name').dblclick();
     const dialog=page.locator('[data-warehouse-dialog="7"]');
+    await dialog.waitFor({state:'visible'});
     assert.equal(await dialog.evaluate(el=>el.open),true);
     const dialogOverflow=await dialog.evaluate(el=>el.scrollWidth-el.clientWidth);
     assert.ok(dialogOverflow<=1,`dialog horizontal overflow ${actor} ${width}: ${dialogOverflow}`);
     await dialog.locator('[data-warehouse-close]').first().click();
     assert.equal(await dialog.evaluate(el=>el.open),false);
     await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-secondary').click();
+    await dialog.waitFor({state:'visible'});
     assert.equal(await dialog.evaluate(el=>el.open),true);
     if(actor==='owner'){
       assert.deepEqual(await dialog.locator('input[name="contact_name[]"]').evaluateAll(inputs=>inputs.map(input=>input.value)),['Иванов Иван','Петров Пётр']);
       assert.equal(await dialog.locator('input[name="address"]').inputValue(),'Москва, Складская улица, 1, корпус 2');
+      assert.equal(await dialog.locator('input[name="latitude"]').inputValue(),'55.75');
+      assert.equal(await dialog.locator('input[name="longitude"]').inputValue(),'37.62');
       await dialog.locator('[data-warehouse-add-contact]').click();
       assert.equal(await dialog.locator('[data-warehouse-contact]').count(),3);
+      await dialog.locator('[data-warehouse-add-contact]').click();
+      assert.equal(await dialog.locator('[data-warehouse-contact]').count(),4);
       await dialog.locator('[data-warehouse-remove-contact]').last().click();
-      assert.equal(await dialog.locator('[data-warehouse-contact]').count(),2);
+      assert.equal(await dialog.locator('[data-warehouse-contact]').count(),3);
     }else {
       assert.equal(await dialog.locator('form').count(),0);
       assert.match(await dialog.innerText(),/Иванов Иван/);
       assert.match(await dialog.innerText(),/Петров Пётр/);
+      assert.match(await dialog.innerText(),/55.75, 37.62/);
     }
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1);
     assert.equal(overflow,false,`outer horizontal scroll ${width}`);
