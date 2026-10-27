@@ -89,6 +89,9 @@ try {
     await dialog.locator('[data-warehouse-close]').first().click();
     assert.equal(await dialog.evaluate(el=>el.open),false);
     await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-secondary').click();
+    await page.waitForTimeout(300);
+    assert.equal(await dialog.evaluate(el=>el.open),false,'single mouse click must not open warehouse dialog');
+    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-secondary').dblclick();
     await dialog.waitFor({state:'visible'});
     assert.equal(await dialog.evaluate(el=>el.open),true);
     if(actor==='owner'){
