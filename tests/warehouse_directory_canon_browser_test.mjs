@@ -56,8 +56,11 @@ try {
     await assertRegistryScroll(page,`warehouse-addresses ${role} ${width}`);
     await assertRegistrySearch(page,{rowSelector:'[data-warehouse-row]',probes:[{query:'Петров',ids:[7]},{query:'Тула',ids:[8]},{query:'3 750',ids:[7]}],
       resolveActual:async p=>p.locator('[data-warehouse-row]:visible').evaluateAll(items=>items.map(item=>item.dataset.registryRowId).sort())},`warehouse-addresses ${role}`);
-    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-name').dblclick();
     const dialog=page.locator('[data-warehouse-dialog="7"]');
+    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-name').click();
+    await page.waitForTimeout(300);
+    assert.equal(await dialog.evaluate(element=>element.open),false,'single mouse click must not open warehouse dialog');
+    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-name').dblclick();
     await dialog.waitFor({state:'visible'});
     assert.equal(await dialog.evaluate(element=>element.open),true);
     assert.ok(await dialog.evaluate(element=>element.scrollWidth-element.clientWidth)<=1);
