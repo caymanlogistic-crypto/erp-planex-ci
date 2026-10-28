@@ -196,6 +196,12 @@ try {
     $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages + ['company.warehouses.addresses'=>true], $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
     $warehouseAccess = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
     $ok($warehouseAccess->canAccessPage('company.warehouses.addresses') && !$warehouseAccess->canAccessPage('company.warehouses.stock'), 'saved role must grant addresses independently of stock');
+    $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages + ['company.route_executors'=>true], $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
+    $driverTsAccess = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
+    $ok($driverTsAccess->canAccessPage('company.route_executors') && !$driverTsAccess->canAccessPage('company.driver_ts_data'), 'saved route executor grant must not open driver and vehicle data');
+    $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages + ['company.driver_ts_data'=>true], $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
+    $driverTsAccess = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
+    $ok($driverTsAccess->canAccessPage('company.driver_ts_data') && !$driverTsAccess->canAccessPage('company.route_executors'), 'saved driver and vehicle grant must not open route executors');
     $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages, $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
     $landingService = new CompanyLandingPageService($pdo, $registry);
     $ok($landingService->pathForAccount($tempAccountId, 7) === '/company/finance/dashboard', 'ordinary role default landing not resolved');

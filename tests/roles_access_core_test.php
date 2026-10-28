@@ -87,6 +87,8 @@ expect(in_array('company.vehicle_sets', array_column($registry->navigationPages(
 expect(in_array('company.vehicle_sets', $registry->grantablePageKeys(), true), 'VehicleSet must remain configurable in role administration.');
 expect(in_array('company.warehouses.addresses', $registry->grantablePageKeys(), true), 'Warehouse addresses must be configurable in role administration.');
 expect(in_array('company.warehouses.addresses', array_column($registry->grantableTree()['Операции']['Склады'] ?? [], 'key'), true), 'Warehouse addresses must appear in the warehouse role group.');
+expect(in_array('company.driver_ts_data', $registry->grantablePageKeys(), true), 'Driver and vehicle data must be configurable in roles.');
+expect(in_array('company.driver_ts_data', array_column($registry->grantableTree()['Операции'][''] ?? [], 'key'), true), 'Driver and vehicle data must appear in the role matrix.');
 expect(count($registry->pageKeys()) === count(array_unique($registry->pageKeys())), 'Page keys must be unique.');
 expect(($registry->page('company.documents.trip_closing')['path'] ?? '') === '/company/trips/closing-documents', 'Original collection route must remain unchanged.');
 expect(($registry->page('company.documents.trip_closing_registry')['path'] ?? '') === '/company/logistics/closing-documents', 'New logistics registry must have its own route.');
@@ -109,6 +111,17 @@ $warehouseAccess = $resolver->resolve(new AccessRequestContext(4, 7));
 expect($warehouseAccess->canAccessPage('company.warehouses.addresses') && !$warehouseAccess->canAccessPage('company.warehouses.stock'), 'Address permission must work independently of warehouse stock.');
 $provider->snapshot = memberSnapshot(['company.warehouses.stock'], ['company.warehouses.addresses'=>'deny']);
 expect(!$resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.warehouses.addresses'), 'Personal address denial must override inherited warehouse access.');
+
+$provider->snapshot = memberSnapshot(['company.route_executors']);
+$driverTsAccess = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($driverTsAccess->canAccessPage('company.route_executors') && !$driverTsAccess->canAccessPage('company.driver_ts_data'), 'Driver and vehicle data must not inherit route executor access.');
+$provider->snapshot = memberSnapshot(['company.driver_ts_data']);
+$driverTsAccess = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($driverTsAccess->canAccessPage('company.driver_ts_data') && !$driverTsAccess->canAccessPage('company.route_executors'), 'Driver and vehicle data must work without route executor access.');
+$provider->snapshot = memberSnapshot(['company.route_executors'], ['company.driver_ts_data' => 'allow']);
+expect($resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.driver_ts_data'), 'Personal driver and vehicle data grant must work independently.');
+$provider->snapshot = memberSnapshot(['company.route_executors', 'company.driver_ts_data'], ['company.driver_ts_data' => 'deny']);
+expect(!$resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.driver_ts_data'), 'Personal driver and vehicle data denial must override its role grant.');
 
 expect(in_array('company.trips.gps_coverage', $registry->grantablePageKeys(), true), 'GPS page must be configurable in roles.');
 $provider->snapshot = memberSnapshot(['company.trips.waste'], [], ['waste_trip'=>'own']);
@@ -152,6 +165,7 @@ $owner = $resolver->resolve(new AccessRequestContext(4, 7));
 expect($owner->isSystemOwner(), 'System owner key must identify owner.');
 expect($owner->compatibilityRoleCode() === 'company_owner', 'Owner compatibility role must derive from system ownership.');
 expect($owner->canAccessPage('company.finance.dashboard'), 'Owner must have every registered page.');
+expect($owner->canAccessPage('company.driver_ts_data'), 'Owner must keep driver and vehicle data access.');
 expect($owner->dataScope('waste_trip') === 'all', 'Owner must have all regulated data.');
 
 $superadmin = $resolver->resolve(new AccessRequestContext(0, 0, true));
@@ -208,6 +222,26 @@ expect($result === null && $status === 403, 'Unknown protected endpoint must den
 expect($result === null && $status === 403 && $output === '{"error":"access_denied"}', 'JSON denial contract failed.');
 [$result, $output, $status] = dispatchOutput($router, 'POST', '/company/switch');
 expect($result === 'switched' && $status === 200, 'Company switch must reach membership-validating service without page authorization.');
+
+$driverTsRouter = new Router($registry);
+foreach (['/company/driver-ts-data', '/company/driver-ts-data/{id}/detail', '/company/driver-ts-data/{id}/files/{documentId}', '/company/driver-ts-data/{id}/archive'] as $path) {
+    $driverTsRouter->get($path, static fn (): string => 'driver-ts-allowed', 'company.driver_ts_data');
+}
+$driverTsUrls = ['/company/driver-ts-data', '/company/driver-ts-data/9/detail', '/company/driver-ts-data/9/files/4', '/company/driver-ts-data/9/archive'];
+$provider->snapshot = memberSnapshot(['company.route_executors']);
+$driverTsRouter->enableCompanyAccess($resolver, new AccessRequestContext(4, 7));
+foreach ($driverTsUrls as $url) {
+    [$result, $output, $status] = dispatchOutput($driverTsRouter, 'GET', $url);
+    expect($result === null && $status === 403, 'Route executor permission must not open driver and vehicle endpoint: ' . $url);
+}
+$provider->snapshot = memberSnapshot(['company.driver_ts_data']);
+$driverTsRouter->enableCompanyAccess($resolver, new AccessRequestContext(4, 7));
+foreach ($driverTsUrls as $url) {
+    [$result, $output, $status] = dispatchOutput($driverTsRouter, 'GET', $url);
+    expect($result === 'driver-ts-allowed' && $status === 200, 'Independent driver and vehicle permission must open endpoint: ' . $url);
+}
+$provider->snapshot = memberSnapshot(['company.clients'], [], ['client' => 'own']);
+$router->enableCompanyAccess($resolver, new AccessRequestContext(4, 7));
 
 expect(AccessControlService::effectiveMembershipId() === 91, 'Runtime membership id contract failed.');
 expect(!AccessControlService::isEffectiveSystemOwner(), 'Ordinary member must not be owner.');
