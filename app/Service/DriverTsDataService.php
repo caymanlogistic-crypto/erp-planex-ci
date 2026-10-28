@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Security\AccessRuntime;
 use PDO;
 use RuntimeException;
 use ZipArchive;
@@ -14,6 +15,7 @@ final class DriverTsDataService
 
     public function listing(): array
     {
+        if (!self::canReadPage()) return [];
         $rows = $this->pdo->query(
             "SELECT c.id AS crew_id, c.created_at, d.full_name AS driver_name, d.phone AS driver_phone,
                     d.email AS driver_email, vu1.brand AS primary_brand, vu1.plate_number AS primary_plate,
@@ -33,7 +35,6 @@ final class DriverTsDataService
                 AND EXISTS (SELECT 1 FROM waste_trips wt WHERE wt.route_executor_id=c.id AND wt.deleted_at IS NULL)
               ORDER BY c.created_at DESC, c.id DESC"
         )->fetchAll(PDO::FETCH_ASSOC);
-        $rows = RouteExecutorService::filterVisibleCrews($this->pdo, $rows);
         if ($rows === []) return [];
         $ids = array_map(static fn(array $row): int => (int)$row['crew_id'], $rows);
         $marks = implode(',', array_fill(0, count($ids), '?'));
@@ -53,7 +54,7 @@ final class DriverTsDataService
 
     public function detail(int $crewId): ?array
     {
-        if ($crewId <= 0 || !RouteExecutorService::canAccessCrew($this->pdo, $crewId)) return null;
+        if ($crewId <= 0 || !self::canReadPage()) return null;
         $stmt = $this->pdo->prepare(
             "SELECT c.id AS crew_id, dvb.id AS block_id, d.id AS driver_id,
                     vs.id AS set_id, vs.set_type, vs.comments AS set_comments,
@@ -89,6 +90,13 @@ final class DriverTsDataService
         foreach ($units->fetchAll(PDO::FETCH_ASSOC) as $unit) $crew['units'][(int)$unit['id']] = $unit;
         $crew['files'] = $this->documents($crew);
         return $crew;
+    }
+
+    private static function canReadPage(): bool
+    {
+        // This read-only directory has its own grant. Reusing route-executor
+        // data scopes would silently empty it for roles granted only this page.
+        return AccessRuntime::current()->canAccessPage('company.driver_ts_data');
     }
 
     private function documents(array $crew): array

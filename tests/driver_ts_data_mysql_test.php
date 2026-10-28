@@ -35,6 +35,13 @@ try {
     $sections=\App\Service\DriverTsDataService::tableRows($detail);
     $check(in_array(['СНИЛС','123-456-789 00'],$sections['driver'],true),'Driver mail-table value appears in workbook data');
     $check(in_array(['Марка','КАМАЗ'],$sections['vehicle'],true),'Vehicle mail-table value appears in workbook data');
+    \App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::member(78,1,['company.driver_ts_data'=>true],['contractor'=>'none','driver'=>'none','vehicle_unit'=>'none']));
+    $check(count($service->listing())===1,'Standalone page grant must show waste executors without route-executor data scopes');
+    $check($service->detail(1)!==null,'Standalone page grant must open assigned waste executor detail');
+    $check($service->detail(2)===null,'Standalone page grant must not expose executor without a waste trip');
+    \App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::member(78,1,['company.route_executors'=>true],['contractor'=>'all','driver'=>'all','vehicle_unit'=>'all']));
+    $check($service->listing()===[] && $service->detail(1)===null,'Route-executor grant alone must not open driver and vehicle data');
+    \App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::systemOwner(1,1,array_column(\App\Security\PageRegistry::companyPages(),'key')));
     $path=\App\Service\DriverTsDataService::workbook($sections);
     try {
         $zip=new ZipArchive();

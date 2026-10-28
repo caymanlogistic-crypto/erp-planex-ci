@@ -24,8 +24,11 @@ if($action==='seed'){
 if($action==='clean'){cleanCompanyPoolDatabase($pdo);echo 'CLEANED';return;}
 if($action==='fingerprint'){echo json_encode([$pdo->query('SELECT COUNT(*) FROM waste_trips')->fetchColumn(),$pdo->query('SELECT COUNT(*) FROM crews')->fetchColumn()]);return;}
 $_SERVER['REQUEST_URI']='/company/driver-ts-data';$_SERVER['SCRIPT_NAME']='/index.php';
-$_SESSION=['company_id'=>1,'role_code'=>'company_owner','account_id'=>1,'user_id'=>1,'membership_id'=>11];
-\App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::systemOwner(1,1,array_column(\App\Security\PageRegistry::companyPages(),'key')));
+$memberMode=$action==='render-member';
+$_SESSION=['company_id'=>1,'role_code'=>$memberMode?'custom_role':'company_owner','account_id'=>1,'user_id'=>1,'membership_id'=>$memberMode?78:11];
+\App\Security\AccessRuntime::setCurrent($memberMode
+ ? \App\Security\EffectiveAccess::member(78,1,['company.driver_ts_data'=>true],['contractor'=>'none','driver'=>'none','vehicle_unit'=>'none'])
+ : \App\Security\EffectiveAccess::systemOwner(1,1,array_column(\App\Security\PageRegistry::companyPages(),'key')));
 $service=new \App\Service\DriverTsDataService($pdo);
 if($action==='detail'){
  $detail=$service->detail((int)($argv[2]??0));
@@ -33,7 +36,7 @@ if($action==='detail'){
  $sections=\App\Service\DriverTsDataService::tableRows($detail);
  require BASE_PATH.'/app/View/partials/driver_ts_data_detail.php';return;
 }
-if($action!=='render')throw new RuntimeException('Invalid action');
+if(!in_array($action,['render','render-member'],true))throw new RuntimeException('Invalid action');
 $company=['id'=>1,'name'=>'Тестовая компания','status'=>'active'];$error=null;$rows=$service->listing();
 foreach($rows as &$row)$row['responsible_name']='Тестовый логист';unset($row);
 $db=new class([]) extends \App\Core\Database {public function connection(): PDO {throw new RuntimeException('No central DB access in fixture');}};

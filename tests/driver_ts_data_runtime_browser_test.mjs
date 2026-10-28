@@ -20,7 +20,7 @@ const server=http.createServer((request,response)=>{
    response.setHeader('Content-Type',file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'application/octet-stream');response.end(fs.readFileSync(file));return;
   }
   response.setHeader('Content-Type','text/html; charset=utf-8');
-  response.end(fixture(pathname.endsWith('/detail')?'detail':'render',...(pathname.endsWith('/detail')?['1']:[])));
+  response.end(fixture(pathname.endsWith('/detail')?'detail':pathname==='/member'?'render-member':'render',...(pathname.endsWith('/detail')?['1']:[])));
  }catch(error){response.statusCode=500;response.end(String(error));}
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -40,6 +40,11 @@ try{
   await page.getByText('123-456-789 00').waitFor();
   assert.deepEqual(errors,[]);await page.close();
  }
+ const memberPage=await browser.newPage({viewport:{width:1280,height:900}});
+ await memberPage.goto(`http://127.0.0.1:${server.address().port}/member`);
+ await memberPage.waitForSelector('[data-registry-ready="true"]');
+ assert.equal(await memberPage.locator('[data-driver-ts-id]').count(),1,'Page-only grant renders waste executor for employee with no driver/vehicle scopes');
+ await memberPage.close();
  assert.equal(fixture('fingerprint'),before,'Runtime GETs never mutate business data');
  console.log('REGISTRY_RUNTIME_PAGE=driver-ts-data');
  console.log('DRIVER_TS_RUNTIME_BROWSER_PASS');
