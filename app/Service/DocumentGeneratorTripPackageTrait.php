@@ -91,15 +91,12 @@ trait DocumentGeneratorTripPackageTrait
 
         $context = ['trip'=>self::tripSnapshot($trip)];
         $template = self::getTemplateVersion($pdo, $templateId, null, true);
-        if (in_array((string)($template['document_type'] ?? ''), ['vehicle_lease_crew','carrier_sublease_crew'], true)
-            && (int)($trip['legacy_source_warehouse_id'] ?? 0) > 0) {
+        if (in_array((string)($template['document_type'] ?? ''), ['vehicle_lease_crew','carrier_sublease_crew'], true)) {
             try {
-                $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
-                if (!$legacy instanceof PDO) throw new RuntimeException('Старая база складов недоступна.');
-                $context['warehouse_loading'] = DocumentGeneratorWarehouseLoadingService::resolve($legacy, $trip, $requestIds);
-                $requestIds = $context['warehouse_loading']['trip_request_ids'] ?? $requestIds;
+                [$warehouseContext, $requestIds] = self::warehouseDocumentContext($trip, $requestIds);
+                $context += $warehouseContext;
             } catch (\Throwable $e) {
-                return self::failed(['Не удалось проверить складскую погрузку: '.$e->getMessage()]);
+                return self::failed(['Не удалось проверить складские адреса: '.$e->getMessage()]);
             }
         }
 
@@ -163,6 +160,15 @@ trait DocumentGeneratorTripPackageTrait
 
         $requestIds = self::tripRequestIds($trip);
         if ($requestIds === []) return self::failed(['В выбранном рейсе нет заявок ФЭО.']);
+        if ($variant === 'upd') {
+            try {
+                [$warehouseContext, $requestIds] = self::warehouseDocumentContext($trip, $requestIds);
+            } catch (\Throwable $e) {
+                return self::failed(['Не удалось проверить складские адреса: '.$e->getMessage()]);
+            }
+        } else {
+            $warehouseContext = [];
+        }
         $crewId = (int)($trip['route_executor_id'] ?? 0);
         if ($crewId <= 0) return self::failed(['В выбранном рейсе не назначен Исполнитель рейса.']);
 
@@ -234,6 +240,7 @@ trait DocumentGeneratorTripPackageTrait
                 'vat_mode' => 'Без НДС',
             ],
         ];
+        $context += $warehouseContext;
         $params = [
             'contract_number' => $contractNumber,
             'contract_date' => $contractDate,
@@ -266,6 +273,7 @@ trait DocumentGeneratorTripPackageTrait
         $snapshot['package'] = $context['package'];
         $snapshot['service'] = [
             'description' => self::clientServiceDescription($snapshot, $contractNumber, $contractDate),
+            'route' => $variant === 'upd' ? self::clientRouteDescription($snapshot) : '',
             'amount' => $amount,
             'vat_mode' => 'Без НДС',
         ];
@@ -556,6 +564,26 @@ trait DocumentGeneratorTripPackageTrait
         return $trip;
     }
 
+    /** @return array{0:array<string,mixed>,1:list<string>} */
+    private static function warehouseDocumentContext(array $trip, array $requestIds): array
+    {
+        $hasSource = (int)($trip['legacy_source_warehouse_id'] ?? 0) > 0;
+        $hasDestination = in_array((string)($trip['legacy_route_type'] ?? ''), ['generator_to_warehouse', 'warehouse_to_warehouse'], true)
+            || (string)($trip['legacy_unload_type'] ?? '') === 'SKLAD';
+        if (!$hasSource && !$hasDestination) return [[], $requestIds];
+        $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
+        if (!$legacy instanceof PDO) throw new RuntimeException('Старая база складов недоступна.');
+        $context = [];
+        if ($hasSource) {
+            $context['warehouse_loading'] = DocumentGeneratorWarehouseLoadingService::resolve($legacy, $trip, $requestIds);
+            $requestIds = $context['warehouse_loading']['trip_request_ids'] ?? $requestIds;
+        }
+        if ($hasDestination) {
+            $context['warehouse_unloading'] = DocumentGeneratorWarehouseUnloadingService::resolve($legacy, $trip);
+        }
+        return [$context, $requestIds];
+    }
+
     private static function loadClientForDocument(PDO $pdo, int $clientId, int $userId, string $role): array
     {
         if (!LinearRouteService::isVisibleEntity($pdo, 'clients', $clientId, ['user_id'=>$userId,'role_code'=>$role], 'client')) {
@@ -747,5 +775,16 @@ trait DocumentGeneratorTripPackageTrait
             . ($period !== '' ? ' за период ' . $period : '')
             . ($parts !== [] ? ': ' . implode('; ', $parts) : '')
             . '; по договору субаренды № ' . $contractNumber . ' от ' . self::formatDateSimple($contractDate);
+    }
+
+    private static function clientRouteDescription(array $snapshot): string
+    {
+        $loading = [];
+        foreach ((array)($snapshot['requests'] ?? []) as $request) {
+            $address = trim((string)($request['document_loading_address'] ?? $request['mno_adres_pogruzki'] ?? ''));
+            if ($address !== '') $loading[$address] = true;
+        }
+        $unloading = trim((string)($snapshot['requests_summary']['unload_address'] ?? ''));
+        return 'Место загрузки: '.implode('; ', array_keys($loading)).'. Место выгрузки: '.$unloading.'.';
     }
 }

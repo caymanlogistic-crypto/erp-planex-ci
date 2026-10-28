@@ -55,6 +55,9 @@ trait DocumentGeneratorWorkflowTrait
         if (is_array($context['warehouse_loading'] ?? null)) {
             $ordered = DocumentGeneratorWarehouseLoadingService::apply($ordered, $context['warehouse_loading']);
         }
+        if (is_string($context['warehouse_unloading'] ?? null)) {
+            $ordered = DocumentGeneratorWarehouseUnloadingService::apply($ordered, $context['warehouse_unloading']);
+        }
         $warnings=[];
         if (trim((string)($googleContacts['warning'] ?? ''))!=='') $warnings[]=(string)$googleContacts['warning'];
         $ignored = (array)($context['warehouse_loading']['ignored_request_ids'] ?? []);

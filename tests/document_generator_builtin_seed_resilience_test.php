@@ -73,7 +73,7 @@ try{
 
     $reset();
     $userTemplate('waybill_driver_assignment','Пользовательский waybill','waybill_driver_assignment_v1.docx');
-    $s=$stash('contract_vehicle_lease_crew_v5.docx');
+    $s=$stash('contract_vehicle_lease_crew_v9.docx');
     try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),8,'C all except missing carrier contract visible');$eq(count($warnings()),1,'C warning');$renderSaved('waybill_driver_assignment');$renderSaved('client_sublease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{$restore($s);}
     echo "SEED_CASE_C=PASS\n";
 

@@ -32,7 +32,7 @@ $has($controller,'generateClientPackage($localPdo, $companyId, $userId, $role, $
 foreach(['document-generator-preview-modal','data-docgen-section="vehicle_lease_crew"','carrier_sublease_crew','data-docgen-section="waybill_driver_assignment"','data-docgen-carrier-trip','data-docgen-client-trip','Сформировать DOCX','Сформировать комплект','Данные исполнителя и заявки ФЭО берутся из выбранного рейса']as$n)$has($view,$n,'UI contract '.$n);
 $ok(!str_contains($view,'name="crew_id"'),'manual executor selection removed from generator UI');
 $ok(!str_contains($view,'name="request_input"'),'manual FEO request entry removed from generator UI');
-$has($templateTrait,'contract_vehicle_lease_crew_v5.docx','built-in v5 seed');
+$has($templateTrait,'contract_vehicle_lease_crew_v9.docx','built-in v9 seed');
 $has($templateTrait,'87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2','built-in v3 SHA');
 echo "DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS\n";
 
@@ -73,13 +73,17 @@ $canon=[
  'contract_vehicle_lease_crew_v3.docx'=>'87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',
  'contract_vehicle_lease_crew_v4.docx'=>'11c72fa3206d86d490f71aa88c47fb79cde9e06e0774c12793c89f9948f33e43',
  'contract_vehicle_lease_crew_v5.docx'=>'464074c526ec0d7a387d46c017ad359a94771163cb7a7f076954fc529a673535',
+ 'contract_vehicle_lease_crew_v9.docx'=>'e83efd9117faf61357fb4dfb9e105c4a989f7bbed9fe062d84355c18dc0df79f',
  'contract_carrier_sublease_crew_v1.docx'=>'074d6a082e1a07b823bf156814842e3cb345f1724bca1656e13e8be0d053719e',
  'contract_carrier_sublease_crew_v2.docx'=>'b3f1068c42b9a9659f4774934eeb8924cf20c58e83e44a9298df98f3e35c0be7',
  'waybill_driver_assignment_v1.docx'=>'5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
  'client_sublease_contract_v1.docx'=>'01ebdc8bb56beb11b20abc787bd6067c7ae3379274e1143cf3e4cf1258f7230c',
+ 'client_upd_contract_v9.docx'=>'c61123bfbd56bcd2c648f348c4dfebbfc10cb1e5af099b563af5a78e3cb4fc87',
  'client_invoice_v1.docx'=>'10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
+ 'client_upd_invoice_v4.docx'=>'6b82b0509cd621e591b818bc31931bc3c50885c0d4565b439ba98fb848e9b1b0',
  'client_act_v1.docx'=>'246b3394254d58a22d6ea492f9db56b2efcabef56d43de495766c2c902c6a1f9',
- 'client_upd_status2_v1.docx'=>'cfb1669b79400014c2a3244e0c6f7c942213105938dc5253972115fdc88b91c6'
+ 'client_upd_status2_v1.docx'=>'cfb1669b79400014c2a3244e0c6f7c942213105938dc5253972115fdc88b91c6',
+ 'client_upd_status2_v8.docx'=>'89666528c3b539faec1c5f7481f424138fb8362972e7edefdfe811e573a0b9f1'
 ];
 $files=[];
 foreach($canon as$n=>$sha){$ps=glob($root.'/resources/document-templates/'.$n.'.b64.part*')?:[];sort($ps,SORT_STRING);$ok($ps!==[],'parts '.$n);$b='';foreach($ps as$f){$e=preg_replace('/\s+/','',(string)file_get_contents($f))??'';$d=base64_decode($e,true);$ok(is_string($d)&&$d!=='','decode '.basename($f));$b.=$d;}$eq(hash('sha256',$b),$sha,'template SHA '.$n);$t=tempnam(sys_get_temp_dir(),'dg4_');$x=$t.'.docx';@unlink($t);file_put_contents($x,$b);$files[$n]=$x;}
@@ -132,7 +136,7 @@ $pdo->exec("INSERT INTO feo_requests VALUES('300001',1.0,'Отправитель
 $googleFixture="header,c1,c2,c3,c4,c5,c6,c7,c8,contacts\n300001,,,,,,,,,111\n300002,,,,,,,,,\"222, two@test\"\n300003,,,,,,,,,three@test\n300004,,,,,,,,,\n300005,,,,,,,,,555\n";App\Service\GoogleSheetsRequestContactService::setDefaultFetcherForTests(static fn(string $url):string=>$googleFixture);
 $company=['id'=>$cid,'name'=>'ООО «ПЛАНЭКС»','inn'=>'5005061234','kpp'=>'500501001','ogrn'=>'1205000000001','legal_address'=>'Воскресенск','physical_address'=>'','bank_name'=>'Банк ПЛАНЭКС','bank_account'=>'40702810000000000001','bank_corr_account'=>'30101810000000000001','bank_bik'=>'044525001','contact_phone'=>'','contact_email'=>'','director_full_name'=>'Гладских Карина Владимировна','director_position'=>'Генеральный директор'];
 $pdo->exec("INSERT INTO user_accounts VALUES(900001,'Текущий менеджер','doc.manager',NULL,NULL,'hash-manager','active'),(900002,'Другой пользователь','other.user',NULL,NULL,'hash-other','active'); INSERT INTO company_roles VALUES(51,$cid,NULL),(52,$cid,NULL); INSERT INTO company_memberships VALUES(12,900001,$cid,51,'active'),(13,900002,$cid,52,'active'); INSERT INTO users(id,membership_id,full_name,login,password_hash,role_code,status,deleted_at) VALUES(202,13,'Другой пользователь','other.user','hash-other','membership_role','active',NULL)");
-App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,1,'company_owner');$ts=App\Service\DocumentGeneratorService::listTemplates($pdo,true);$bt=[];foreach($ts as$t)$bt[$t['document_type']]=$t;$eq($bt['vehicle_lease_crew']['sha256'],$canon['contract_vehicle_lease_crew_v5.docx'],'contract seed v5');$eq($bt['carrier_sublease_crew']['sha256'],$canon['contract_carrier_sublease_crew_v2.docx'],'sublease seed v2');$ph=json_decode((string)$bt['vehicle_lease_crew']['placeholders_json'],true)?:[];$ok(!in_array('executor.bank_inn',$ph,true),'active v5 bank placeholder clean');$ok(in_array('vehicle.vin',$ph,true),'active v5 vehicle VIN placeholder');
+App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,1,'company_owner');$ts=App\Service\DocumentGeneratorService::listTemplates($pdo,true);$bt=[];foreach($ts as$t)$bt[$t['document_type']]=$t;$eq($bt['vehicle_lease_crew']['sha256'],$canon['contract_vehicle_lease_crew_v9.docx'],'contract seed v9');$eq($bt['carrier_sublease_crew']['sha256'],$canon['contract_carrier_sublease_crew_v2.docx'],'sublease seed v2');$ph=json_decode((string)$bt['vehicle_lease_crew']['placeholders_json'],true)?:[];$ok(!in_array('executor.bank_inn',$ph,true),'active v9 bank placeholder clean');$ok(in_array('vehicle.vin',$ph,true),'active v9 vehicle VIN placeholder');
 $allScopes=['client'=>'all','contractor'=>'all','vehicle_unit'=>'all','driver'=>'all','linear_trip'=>'all','waste_trip'=>'all'];
 $managerAccess=App\Security\EffectiveAccess::member(12,$cid,['company.route_executors'=>true,'company.documents.create'=>true,'company.documents.history'=>true],$allScopes,'custom_role');
 App\Security\AccessRuntime::setCurrent($managerAccess);

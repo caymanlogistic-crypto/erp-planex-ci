@@ -39,34 +39,37 @@ trait DocumentGeneratorTemplateTrait
 
         try {
             $defaults = [
-                'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v5.docx'],
+                'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v9.docx'],
                 'carrier_sublease_crew' => ['Договор-заявка субаренды ТС с экипажем', 'contract_carrier_sublease_crew_v2.docx'],
                 'waybill_driver_assignment' => ['Приложение к путевому листу / задание водителю', 'waybill_driver_assignment_v1.docx'],
                 'client_sublease_crew' => ['Договор субаренды транспортного средства с экипажем', 'client_sublease_contract_v1.docx'],
                 'client_invoice' => ['Счёт клиенту', 'client_invoice_v1.docx'],
                 'client_act' => ['Акт клиенту', 'client_act_v1.docx'],
-                'client_upd_contract' => ['Договор клиенту для комплекта с УПД', 'client_sublease_contract_v1.docx'],
-                'client_upd_invoice' => ['Счёт клиенту для комплекта с УПД', 'client_invoice_v1.docx'],
-                'client_upd_status2' => ['УПД клиенту, статус 2', 'client_upd_status2_v1.docx'],
+                'client_upd_contract' => ['Договор клиенту для комплекта с УПД', 'client_upd_contract_v9.docx'],
+                'client_upd_invoice' => ['Счёт клиенту для комплекта с УПД', 'client_upd_invoice_v4.docx'],
+                'client_upd_status2' => ['УПД клиенту, статус 2', 'client_upd_status2_v8.docx'],
             ];
             foreach ($defaults as $type => [$name, $filename]) {
-                $stmt = $pdo->prepare('SELECT t.id,v.sha256 FROM document_templates t LEFT JOIN document_template_versions v ON v.id=t.active_version_id WHERE t.document_type=? ORDER BY t.id LIMIT 1');
+                $stmt = $pdo->prepare('SELECT t.id,t.name,v.sha256 FROM document_templates t LEFT JOIN document_template_versions v ON v.id=t.active_version_id WHERE t.document_type=? ORDER BY t.id LIMIT 1');
                 $stmt->execute([$type]);
                 $existing = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
                 if ($existing !== null) {
-                    // Upgrade only the original ERP builtin; leave owner-uploaded versions untouched.
+                    // Upgrade only the known active version; preserve other owner-uploaded versions.
                     $previousBuiltInSha = [
                         'vehicle_lease_crew' => [
                             '87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',
                             '11c72fa3206d86d490f71aa88c47fb79cde9e06e0774c12793c89f9948f33e43',
+                            'e3fab5f48b3de28d298f578ebd7aef8f99214b51fef4fa502200d5e5e02e5d1d',
                         ],
                         'carrier_sublease_crew' => ['074d6a082e1a07b823bf156814842e3cb345f1724bca1656e13e8be0d053719e'],
-                        'client_upd_status2' => ['ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312'],
+                        'client_upd_contract' => ['8da38048a57479485655ba115006428748221c0b0ce9d02ec66f09ef873150e9'],
+                        'client_upd_invoice' => ['10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd'],
+                        'client_upd_status2' => ['ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312', 'f13cc1b92512d5a19d7fe31fc1fa7847e0688ef4daa3b6f41da2afb5f365e203'],
                     ];
                     if (isset($previousBuiltInSha[$type]) && in_array((string)($existing['sha256'] ?? ''), $previousBuiltInSha[$type], true)) {
                         $source = self::materializeBuiltInTemplate($filename);
                         try {
-                            self::createTemplateVersionFromFile($pdo, $companyId, (int)$existing['id'], $type, $name, $source, $filename, $userId, $role);
+                            self::createTemplateVersionFromFile($pdo, $companyId, (int)$existing['id'], $type, (string)$existing['name'], $source, $filename, $userId, $role);
                         } finally {
                             @unlink($source);
                         }
@@ -112,13 +115,17 @@ trait DocumentGeneratorTemplateTrait
             'contract_vehicle_lease_crew_v3.docx' => '87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',
             'contract_vehicle_lease_crew_v4.docx' => '11c72fa3206d86d490f71aa88c47fb79cde9e06e0774c12793c89f9948f33e43',
             'contract_vehicle_lease_crew_v5.docx' => '464074c526ec0d7a387d46c017ad359a94771163cb7a7f076954fc529a673535',
+            'contract_vehicle_lease_crew_v9.docx' => 'e83efd9117faf61357fb4dfb9e105c4a989f7bbed9fe062d84355c18dc0df79f',
             'contract_carrier_sublease_crew_v1.docx' => '074d6a082e1a07b823bf156814842e3cb345f1724bca1656e13e8be0d053719e',
             'contract_carrier_sublease_crew_v2.docx' => 'b3f1068c42b9a9659f4774934eeb8924cf20c58e83e44a9298df98f3e35c0be7',
             'waybill_driver_assignment_v1.docx' => '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
             'client_sublease_contract_v1.docx' => '01ebdc8bb56beb11b20abc787bd6067c7ae3379274e1143cf3e4cf1258f7230c',
+            'client_upd_contract_v9.docx' => 'c61123bfbd56bcd2c648f348c4dfebbfc10cb1e5af099b563af5a78e3cb4fc87',
             'client_invoice_v1.docx' => '10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
+            'client_upd_invoice_v4.docx' => '6b82b0509cd621e591b818bc31931bc3c50885c0d4565b439ba98fb848e9b1b0',
             'client_act_v1.docx' => '246b3394254d58a22d6ea492f9db56b2efcabef56d43de495766c2c902c6a1f9',
             'client_upd_status2_v1.docx' => 'cfb1669b79400014c2a3244e0c6f7c942213105938dc5253972115fdc88b91c6',
+            'client_upd_status2_v8.docx' => '89666528c3b539faec1c5f7481f424138fb8362972e7edefdfe811e573a0b9f1',
         ];
         if (!isset($expected[$filename])) {
             throw new RuntimeException('Неизвестный встроенный DOCX-шаблон: ' . $filename);
