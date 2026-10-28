@@ -44,9 +44,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "b9cae6d5244dc3e53ef10e4bfde7471edd0c624f",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/b9cae6d5244dc3e53ef10e4bfde7471edd0c624f/tests/roles_access_core_test.php",
-      "verification_note": "2026-10-28: company.driver_ts_data is independently grantable in Roles & Access; route-executors alias removed. Core, route inventory, role UI browser, real MySQL role save/readback and endpoint integration checks passed. Existing role grants remain unchanged; owners retain access.",
+      "verified_sha": "b4e3b5dae5a58758de02584944f5a451a6ff3e39",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/b4e3b5dae5a58758de02584944f5a451a6ff3e39/tests/driver_ts_data_mysql_test.php",
+      "verification_note": "2026-10-28: the standalone company.driver_ts_data grant now controls both route access and waste-crew data reads. A member with only this page grant sees waste-assigned crews even when contractor, driver and vehicle scopes are NONE; without this page grant, list and detail deny. Route-executor scope rules remain unchanged. MySQL and runtime browser regressions passed; production role grants were not modified.",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
