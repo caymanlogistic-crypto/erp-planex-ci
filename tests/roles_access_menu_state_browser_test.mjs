@@ -13,6 +13,9 @@ try{const page=await browser.newPage({viewport:{width:1366,height:900}}),errors=
  for(const label of ['Касса','Операции']){const row=page.locator('.roles-access__tree-page--role',{hasText:label}).filter({has:page.locator('.roles-access__tree-page-note',{hasText:'Скрыто из меню'})});assert.equal(await row.count(),1,label+' hidden marker');}
  const names=await page.locator('.roles-access__tree-page--role .roles-access__tree-page-label').allTextContents();
  assert.equal(names.some(x=>x.includes('Сообщения MAX')),false,'MAX messages must not be grantable');
+ const driverTsPermission=page.locator('.roles-access__tree-page--role input[data-page-key="company.driver_ts_data"]');
+ assert.equal(await driverTsPermission.count(),1,'Driver and vehicle data must have its own role checkbox');
+ assert.equal(await driverTsPermission.isChecked(),true,'Driver and vehicle data checkbox must reflect saved grant');
  const statisticsGroup=page.locator('.roles-access__tree-group',{has:page.locator('.roles-access__tree-group-head',{hasText:'Статистика'})});
  assert.equal(await statisticsGroup.count(),1,'roles-access statistics group missing');
  assert.deepEqual(await statisticsGroup.locator('.roles-access__tree-page--role .roles-access__tree-page-label').allTextContents(),['Работа логистов','Доля компаний в ФЭО','Баланс заявок']);
