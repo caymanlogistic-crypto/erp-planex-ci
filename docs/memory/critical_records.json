@@ -162,9 +162,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "069b80bc3b1b075ff8b96db7f0bfb25f96575a5f",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/069b80bc3b1b075ff8b96db7f0bfb25f96575a5f/.github/workflows/ci.yml",
-      "verification_note": "2026-10-26: PR #475 static job reached its 15-minute limit after runner dependency setup and was canceled during approved UI browser QA. The existing static job timeout is 40 minutes in the implementation commit; the LOCAL CRITICAL preflight and approved UI browser checks pass before publication.",
+      "verified_sha": "f42a0a00656438d9c479aa1a8cda6e4a03011cae",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/commit/f42a0a00656438d9c479aa1a8cda6e4a03011cae",
+      "verification_note": "2026-10-28: AGENTS.md adds the OWNER rule against phone-specific visual adaptation without separate instruction. CI workflows, path classification and gates are unchanged. Local browser/runtime checks and ui_standard catalog check pass on this candidate.",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
