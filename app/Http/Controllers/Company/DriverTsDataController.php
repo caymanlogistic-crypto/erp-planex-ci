@@ -34,8 +34,9 @@ final class DriverTsDataController
         $pageContext='Данные Вод и ТС › Компания';
         $pageStylesheets[]='/assets/css/route-executor-list-v016.css';
         $pageStylesheets[]='/assets/css/registry-components.css';
-        $pageStylesheets[]='/assets/css/driver-ts-data.css';
         $pageScripts[]='/assets/js/driver-ts-data.js';
+        $pageScripts[]='/assets/js/table-reference-select.js';
+        $pageScripts[]='/assets/js/registry-components.js';
         $company=null; $rows=[]; $error=null;
         try {
             $context=$this->context();

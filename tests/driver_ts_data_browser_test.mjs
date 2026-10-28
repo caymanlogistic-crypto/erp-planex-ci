@@ -5,6 +5,9 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './helpers/registry_behavior_contract.mjs';
+import {driverTsExpectations} from './fixtures/driver_ts_data_expectations.mjs';
 
 const require=createRequire(import.meta.url);
 const {chromium}=require('playwright');
@@ -22,19 +25,25 @@ const server=http.createServer((request,response)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
 try{
-  for(const [width,height] of [[390,844],[1280,900],[1920,1080]]){
+  for(const [width,height] of [[390,844],[1280,900],[1920,1080],[3840,2160]]){
     const page=await browser.newPage({viewport:{width,height}});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/company/driver-ts-data`);
+    await page.waitForSelector('[data-registry-ready="true"]');
+    await assertRegistryVisualContract(page,`driver-ts-data ${width}`);
+    await assertRegistryDataContract(page,'driver-ts-data');
     assert.equal(await page.locator('.driver-ts-data-table th').first().textContent(),'Участвует в рейсах');
     assert.equal(await page.locator('.driver-ts-data-table th').count(),4);
-    assert.equal(await page.locator('.driver-ts-data-table tbody tr').count(),2);
+    assert.equal(await page.locator('.driver-ts-data-table tbody tr').count(),37);
     assert.equal(await page.locator('.route-executors-page-head .page-head-actions').count(),0);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${width} outer overflow`);
+    await assertRegistryRows(page,driverTsExpectations,'driver-ts-data');
+    await assertRegistrySearch(page,{...driverTsExpectations,resolveActual:async page=>page.locator('.driver-ts-data-table tbody > tr:not(.is-hidden)').evaluateAll(items=>items.map(row=>row.dataset.registryRowId).sort())},'driver-ts-data');
+    await assertRegistryScroll(page,`driver-ts-data ${width}`);
     await page.locator('[data-driver-ts-search]').fill('#351');
     assert.equal(await page.locator('[data-driver-ts-count]').textContent(),'1');
     await page.locator('[data-driver-ts-reset]').click();
-    assert.equal(await page.locator('[data-driver-ts-count]').textContent(),'2');
+    assert.equal(await page.locator('[data-driver-ts-count]').textContent(),'37');
     await page.locator('[data-driver-ts-id="9"]').dblclick();
     await page.locator('.driver-ts-files-table').waitFor();
     assert.equal(await page.locator('[data-driver-ts-dialog]').evaluate(el=>el.open),true);

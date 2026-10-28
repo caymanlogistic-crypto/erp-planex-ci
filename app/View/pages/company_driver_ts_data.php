@@ -16,21 +16,22 @@ require base_path('app/View/partials/registry_ui_head.php');
 <?php elseif ($rows === []): ?>
 <div class="panel"><div class="empty-state"><p class="empty-title">Нет исполнителей рейсов «Отходы»</p></div></div>
 <?php else: ?>
-<div class="table-card table-card--standard route-executors-card registry-ui-card registry-ui-sticky-table registry-ui-scroll driver-ts-card" data-driver-ts-list>
+<?php require base_path('app/View/partials/registry_ui_state_scope.php'); ?>
+<div class="table-card table-card--standard route-executors-card registry-ui-card registry-ui-sticky-table registry-ui-scroll driver-ts-card" data-driver-ts-list data-registry-id="driver-ts-data" data-registry-state-scope="<?= e($registryUiStateScope) ?>">
   <div class="table-toolbar registry-ui-toolbar">
     <div class="found-label">Найдено: <b data-driver-ts-count><?= count($rows) ?></b></div>
     <div class="toolbar-right"><button type="button" class="registry-ui-reset" data-driver-ts-reset hidden>Сбросить фильтр</button>
-      <div class="toolbar-sort"><select class="toolbar-select" data-driver-ts-sort aria-label="Сортировка данных водителей и ТС"><option value="date">По дате добавления</option><option value="alpha">По алфавиту</option></select></div>
-      <div class="registry-ui-search-group"><input class="toolbar-search registry-ui-search" type="search" data-driver-ts-search placeholder="Поиск по таблице" aria-label="Поиск водителя, ТС или рейса" autocomplete="off"></div>
+      <div class="toolbar-sort"><select class="toolbar-select" data-driver-ts-sort data-table-reference-select="driver-ts-data" data-registry-field="sort" data-registry-default="date" aria-label="Сортировка данных водителей и ТС"><option value="date">По дате добавления</option><option value="alpha">По алфавиту</option></select></div>
+      <div class="registry-ui-search-group"><input class="toolbar-search registry-ui-search" type="search" data-driver-ts-search data-registry-field="query" data-registry-default="" placeholder="Поиск по таблице" aria-label="Поиск водителя, ТС или рейса" autocomplete="off"></div>
     </div>
   </div>
   <div class="table-scroll"><table class="table registry-ui-table registry-ui-data registry-ui-table--executors driver-ts-data-table">
-    <colgroup><col style="width:27%"><col style="width:29%"><col style="width:32%"><col style="width:12%"></colgroup>
+    <colgroup><col><col><col><col></colgroup>
     <thead><tr><th>Участвует в рейсах</th><th>Водитель</th><th>Комплект ТС</th><th>Логист</th></tr></thead>
     <tbody>
     <?php foreach ($rows as $row): ?>
-      <tr data-driver-ts-id="<?= (int)$row['crew_id'] ?>" data-sort-date="<?= (int)strtotime((string)$row['created_at']) ?>" data-sort-alpha="<?= e(mb_strtolower((string)$row['driver_name'])) ?>" tabindex="0" aria-label="<?= e($row['driver_name']) ?>. Двойное нажатие открывает данные водителя и ТС">
-        <td data-label="Участвует в рейсах"><div class="registry-ui-value"><?php foreach ($row['trips'] as $i=>$trip): ?><?= $i ? ', ' : '' ?><span class="registry-id">#<?= (int)$trip ?></span><?php endforeach; ?></div></td>
+      <tr data-driver-ts-id="<?= (int)$row['crew_id'] ?>" data-registry-row-id="<?= (int)$row['crew_id'] ?>" data-sort-date="<?= (int)strtotime((string)$row['created_at']) ?>" data-sort-alpha="<?= e(mb_strtolower((string)$row['driver_name'])) ?>" tabindex="0" aria-label="<?= e($row['driver_name']) ?>. Двойное нажатие открывает данные водителя и ТС">
+        <td data-label="Участвует в рейсах"><span class="registry-ui-primary"><?= e(implode(', ',array_map(static fn(int $id): string=>'#'.$id,$row['trips']))) ?></span></td>
         <td class="route-person-cell" data-label="Водитель"><div class="registry-ui-value"><strong class="registry-ui-name"><?= e($row['driver_name']) ?></strong><?php foreach (['driver_phone','driver_email'] as $field): ?><?php if (trim((string)($row[$field]??''))!==''): ?><span class="route-cell-secondary registry-ui-secondary"><?= e($row[$field]) ?></span><?php endif; ?><?php endforeach; ?></div></td>
         <td class="route-vehicle-cell" data-label="Комплект ТС"><div class="registry-ui-value"><?php foreach (['primary','secondary'] as $role): ?><?php $brand=trim((string)($row[$role.'_brand']??''));$plate=trim((string)($row[$role.'_plate']??''));if($brand===''&&$plate==='')continue; ?><span class="route-vehicle-line"><span class="route-vehicle-brand registry-ui-primary"><?= e($brand) ?></span> <span class="route-vehicle-plate registry-ui-primary"><?= e(\App\Service\RouteExecutorListPresentation::plate($plate,$role==='secondary')) ?></span><?php foreach (['capacity'=>' т','volume'=>' м³'] as $metric=>$suffix): ?><?php $value=\App\Service\RouteExecutorListPresentation::metric($row[$role.'_'.$metric]??null);if($value!==''): ?><span class="route-vehicle-metric registry-ui-secondary">· <?= e($value.$suffix) ?></span><?php endif; ?><?php endforeach; ?></span><?php endforeach; ?></div></td>
         <?php $manager=(string)($row['responsible_name']??'—'); ?>

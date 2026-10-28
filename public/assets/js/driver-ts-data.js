@@ -18,7 +18,7 @@
       ? a.dataset.sortAlpha.localeCompare(b.dataset.sortAlpha,'ru')
       : Number(b.dataset.sortDate)-Number(a.dataset.sortDate));
     let visible=0;
-    ordered.forEach(row=>{row.hidden=query!==''&&!row.textContent.toLocaleLowerCase('ru').includes(query);if(!row.hidden)visible++;tbody.append(row);});
+    ordered.forEach(row=>{row.classList.toggle('is-hidden',query!==''&&!row.textContent.toLocaleLowerCase('ru').includes(query));if(!row.classList.contains('is-hidden'))visible++;tbody.append(row);});
     count.textContent=String(visible);
     reset.hidden=query==='';
   };
