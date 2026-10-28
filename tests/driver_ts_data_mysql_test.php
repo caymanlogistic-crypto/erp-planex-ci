@@ -5,6 +5,7 @@ $config=require dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/entrypoint_dependencies.php';
 require_once BASE_PATH.'/app/Support/crew_driver_helpers.php';
 require_once BASE_PATH.'/app/Service/DriverTsDataService.php';
+require_once BASE_PATH.'/app/Service/RouteExecutorReviewArchive.php';
 
 $schema=(string)getenv('PLANEX_TEST_FIXED_DB');
 if ($schema==='' || !in_array($schema,explode(',',(string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')),true)) throw new RuntimeException('Disposable schema required');
@@ -32,6 +33,22 @@ try {
     $check($service->detail(2)===null,'Unassigned executor detail is denied');
     $detail=$service->detail(1);
     $check($detail!==null && count($detail['files'])===1 && $detail['files'][0]['original_name']==='passport.pdf','Only own executor documents are included');
+    $archiveDetail=$detail;
+    $archiveDetail['drivers'][0]['full_name']='Иванов Иван Иванович';
+    $archiveDetail['secondary_id']=2;
+    $archiveDetail['units'][2]=['plate_number'=>'В123СХ77'];
+    $archiveDetail['files']=[
+        ['entity_type'=>'driver','entity_id'=>1,'document_type'=>'Паспорт','document_code'=>'passport','original_name'=>'scan.pdf'],
+        ['entity_type'=>'driver','entity_id'=>1,'document_type'=>'Паспорт','document_code'=>'passport','original_name'=>'scan2.PDF'],
+        ['entity_type'=>'driver','entity_id'=>1,'document_type'=>'Водительское удостоверение','document_code'=>'driver_license','original_name'=>'license.jpg'],
+        ['entity_type'=>'vehicle_unit','entity_id'=>1,'document_type'=>'СТС','document_code'=>'sts','original_name'=>'main.webp'],
+        ['entity_type'=>'vehicle_unit','entity_id'=>2,'document_type'=>'СТС','document_code'=>'sts','original_name'=>'trailer.webp'],
+        ['entity_type'=>'vehicle_unit','entity_id'=>2,'document_type'=>'Диагностическая карта','document_code'=>'diagnostic_card','original_name'=>'card.pdf'],
+        ['entity_type'=>'driver','entity_id'=>1,'document_type'=>'Прочее','document_code'=>'','original_name'=>'other.txt'],
+    ];
+    $archiveNames=\App\Service\DriverTsDataService::archiveDocumentNames($archiveDetail);
+    $check($archiveNames===['Паспорт Иванов.pdf','Паспорт Иванов 2.pdf','Водительское удостоверение Иванов.jpg','СТС автомобиля А123ВС77.webp','СТС прицепа В123СХ77.webp','Диагностическая карта прицепа В123СХ77.pdf','other.txt'],'Downloaded files follow the emailed ZIP semantic names and duplicate suffixes');
+    $check(\App\Service\DriverTsDataService::archiveDownloadName($archiveDetail)==='Иванов Иван Иванович А123ВС77.zip','ZIP name contains full primary driver and primary plate only');
     $sections=\App\Service\DriverTsDataService::tableRows($detail);
     $check(in_array(['СНИЛС','123-456-789 00'],$sections['driver'],true),'Driver mail-table value appears in workbook data');
     $check(in_array(['Марка','КАМАЗ'],$sections['vehicle'],true),'Vehicle mail-table value appears in workbook data');

@@ -2,6 +2,7 @@
 
 require_once base_path('app/Support/crew_driver_helpers.php');
 require_once base_path('app/Service/DriverTsDataService.php');
+require_once base_path('app/Service/RouteExecutorReviewArchive.php');
 require_once base_path('app/Service/DocumentService.php');
 require_once base_path('app/Http/Controllers/Company/DriverTsDataController.php');
 
