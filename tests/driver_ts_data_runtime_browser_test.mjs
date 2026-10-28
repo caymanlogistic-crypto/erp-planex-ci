@@ -41,5 +41,6 @@ try{
   assert.deepEqual(errors,[]);await page.close();
  }
  assert.equal(fixture('fingerprint'),before,'Runtime GETs never mutate business data');
+ console.log('REGISTRY_RUNTIME_PAGE=driver-ts-data');
  console.log('DRIVER_TS_RUNTIME_BROWSER_PASS');
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));fixture('clean');}
