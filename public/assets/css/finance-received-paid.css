@@ -31,9 +31,6 @@
 .rp-side-detail h4{margin:0 0 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--muted,#746f66)}
 .rp-invoice-list,.rp-payment-list{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:74px}
 .rp-invoice-link,.rp-add-link{border:0;background:none;padding:0;color:var(--accent,#855d34);font:inherit;text-align:left;text-decoration:underline;cursor:pointer}
-.registry-ui-modal--finance .rp-payment-status-link{justify-self:start;text-decoration:none;cursor:pointer}
-.registry-ui-modal--finance .rp-payment-status-link:hover{text-decoration:none}
-.registry-ui-modal--finance .rp-payment-status-link:focus-visible{outline:2px solid #131210;outline-offset:2px}
 .rp-invoice-link{font-weight:700}
 .rp-add-link{margin-top:auto;font-size:11px;text-decoration:none}
 .rp-invoice-link:hover,.rp-add-link:hover{text-decoration:underline}
