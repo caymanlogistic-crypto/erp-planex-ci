@@ -37,7 +37,9 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 435, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 439, f"company route inventory drift: {len(company_routes)}"
+for endpoint in ('/company/driver-ts-data','/company/driver-ts-data/{id}/detail','/company/driver-ts-data/{id}/files/{documentId}','/company/driver-ts-data/{id}/archive'):
+    assert ('app/Http/Routes/company_driver_ts_data.php',endpoint) in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/warehouses/addresses") in company_routes
 assert ("app/Http/Routes/company_feo_transfers.php", "/company/feo/requests/transfers/{id}/delete") in company_routes
 assert "[$feoTransferController,'deleteReturned'],$feoTransfersPage" in (ROOT / "app/Http/Routes/company_feo_transfers.php").read_text(encoding="utf-8")

@@ -53,6 +53,7 @@ $feoShareStatisticsActive = str_starts_with($requestPath, '/company/statistics/f
 $cargoBalanceStatisticsActive = str_starts_with($requestPath, '/company/statistics/cargo-balance');
 $statisticsOpen = $managerStatisticsActive || $feoShareStatisticsActive || $cargoBalanceStatisticsActive;
 $routeExecutorsActive = str_starts_with($requestPath, '/company/route-executors');
+$driverTsDataActive = str_starts_with($requestPath, '/company/driver-ts-data');
 $documentGeneratorOpen = str_starts_with($requestPath, '/company/document-generator');
 $documentGeneratorCreateActive = $requestPath === '/company/document-generator';
 $documentGeneratorHistoryActive = $requestPath === '/company/document-generator/history';
@@ -148,6 +149,7 @@ $wideWorkspacePrefixes = [
     '/company/logistics-assistant',
     '/company/tn-review',
     '/company/route-executors',
+    '/company/driver-ts-data',
     '/company/feo/requests',
     '/company/contractors',
     '/company/drivers',
@@ -456,6 +458,7 @@ if (empty($topbarCrumbs)) {
                     </svg>
                     <span class="nav-label">Исполнители рейса</span>
                 </a>
+                <a class="nav-item<?= $driverTsDataActive ? ' is-active' : '' ?>" href="<?= app_url('/company/driver-ts-data') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M5 17h-2v-11a1 1 0 0 1 1 -1h9v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5"/></svg><span class="nav-label">Данные Вод и ТС</span></a>
                 <div class="nav-item is-parent<?= $documentGeneratorOpen ? ' is-open is-active' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <path d="M3 1.5H10L13 4.5V14.5H3V1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -691,6 +694,7 @@ if (empty($topbarCrumbs)) {
                     </svg>
                     <span class="nav-label">Исполнители рейса</span>
                 </a>
+                <a class="nav-item<?= $driverTsDataActive ? ' is-active' : '' ?>" href="<?= app_url('/company/driver-ts-data') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M5 17h-2v-11a1 1 0 0 1 1 -1h9v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5"/></svg><span class="nav-label">Данные Вод и ТС</span></a>
                 <div class="nav-item is-parent<?= $documentGeneratorOpen ? ' is-open is-active' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <path d="M3 1.5H10L13 4.5V14.5H3V1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>

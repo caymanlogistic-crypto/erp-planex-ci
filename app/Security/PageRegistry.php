@@ -73,6 +73,7 @@ final class PageRegistry
             self::definition('company.feo.weights', 'Изменение веса', 'Операции', 'Заявки ФЭО', 63, '/company/feo/requests/weights'),
             self::definition('company.feo.coordinates', 'Определение координат', 'Операции', 'Заявки ФЭО', 64, '/company/feo/requests/coordinates'),
             self::definition('company.route_executors', 'Исполнители рейса', 'Операции', '', 100, '/company/route-executors'),
+            self::definition('company.driver_ts_data', 'Данные Вод и ТС', 'Операции', '', 101, '/company/driver-ts-data', grantable: false),
             self::definition('company.documents.create', 'Создать документ', 'Операции', 'Генератор договоров', 110, '/company/document-generator'),
             self::definition('company.documents.history', 'История документов', 'Операции', 'Генератор договоров', 120, '/company/document-generator/history'),
             self::definition('company.documents.templates', 'Шаблоны договоров', 'Операции', 'Генератор договоров', 130, '/company/document-generator/templates'),

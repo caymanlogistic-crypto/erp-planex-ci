@@ -104,6 +104,9 @@ final class EffectiveAccess
         if ($pageKey === 'company.finance.received_paid') {
             $pageKey = 'company.finance.invoices';
         }
+        if ($pageKey === 'company.driver_ts_data') {
+            $pageKey = 'company.route_executors';
+        }
         return $this->active && ($this->pagePermissions[$pageKey] ?? false) === true;
     }
 

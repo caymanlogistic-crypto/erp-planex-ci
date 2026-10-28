@@ -372,6 +372,35 @@
       }
     },
     {
+      "id": "driver-ts-data",
+      "family": "registry",
+      "route": "/erpv2/company/driver-ts-data",
+      "view": "app/View/pages/company_driver_ts_data.php",
+      "asset_owner": "app/Http/Controllers/Company/DriverTsDataController.php",
+      "browser_test": "tests/driver_ts_data_browser_test.mjs",
+      "runtime_browser_test": "tests/driver_ts_data_runtime_browser_test.mjs",
+      "sticky": true,
+      "reference_select": true,
+      "data_roles": ["primary", "name", "secondary"],
+      "adaptation_status": "current_20261018",
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "truck",
+        "source": "app/View/components/tabler/outline/truck.svg"
+      },
+      "table_surfaces": [{
+        "id": "main",
+        "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+        "row_selector": "tbody > tr:not(:has(td[colspan]))"
+      }],
+      "table_states": [{"id":"initial","visible":["main"],"data":{"main":"populated"}}],
+      "async_search": {"applicable":false,"reason":"Поиск выполняется локально по загруженным строкам."},
+      "contract_sources": ["app/Service/DriverTsDataService.php", "tests/driver_ts_data_mysql_test.php"]
+    },
+    {
       "id": "trips-departures",
       "family": "registry",
       "route": "/erpv2/company/trips/departures",

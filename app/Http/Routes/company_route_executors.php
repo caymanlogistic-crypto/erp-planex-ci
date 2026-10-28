@@ -33,3 +33,4 @@ $router->get('/company/route-executors/{id}', [$controller, 'view'], $routeExecu
 $router->get('/company/route-executors/{id}/edit', [$controller, 'editForm'], $routeExecutorsPage);
 $router->post('/company/route-executors/{id}/edit', [$controller, 'editSubmit'], $routeExecutorsPage);
 $router->post('/company/route-executors/{id}/archive', [$controller, 'archive'], $routeExecutorsPage);
+require_once base_path('app/Http/Routes/company_driver_ts_data.php');
