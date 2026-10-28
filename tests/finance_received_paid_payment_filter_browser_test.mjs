@@ -35,6 +35,9 @@ try{
  };
  await page.goto('http://127.0.0.1/company/finance/received-paid');
  await mountFixture();
+ assert.equal(await page.locator('#rp-list tr[data-id="102"] td:nth-child(12) .registry-ui-secondary').innerText(),'оплата заблок.','partial payment with incomplete documents stays blocked');
+ assert.equal(await page.locator('#rp-list tr[data-id="103"] td:nth-child(12) .registry-ui-secondary').innerText(),'ожидает оплаты','unpaid complete documents await payment');
+ assert.equal(await page.locator('#rp-list tr[data-id="101"] td:nth-child(12) .registry-ui-secondary').count(),0,'fully paid carrier has no caption');
  const toolbar=page.locator('.rp-v015-toolbar');
  const reset=toolbar.locator('.registry-ui-reset');
  assert.equal(await toolbar.locator(':scope > .registry-ui-checkboxes > .found-label + .filter-sep + label:has(#rp-hide-complete)').count(),1,'count, divider and original checkbox share the left group');
@@ -154,7 +157,7 @@ try{
  assert.equal(await page.locator('#rp-list tr[data-id="102"] td').nth(1).innerText(),'Рейс 102');
  await page.locator('#rp-list tr[data-id="101"]').dblclick();
  assert.equal(await page.locator('#rp-detail-modal').isVisible(),true);
- assert.equal(await page.locator('#rp-detail-modal .rp-v015-detail-driver').count(),1);
+ assert.equal(await page.locator('#rp-detail-modal .registry-ui-modal-secondary').filter({hasText:'Водитель:'}).count(),1);
  await page.evaluate(()=>{window.fetch=async url=>{window.__invoiceUrl=url;return {ok:true,text:async()=>'<p>Счёт открыт</p>'};};});
  await page.locator('#rp-detail-modal [data-view-invoice]').first().click();
  assert.equal(await page.locator('#rp-detail-modal').isVisible(),false,'invoice view replaces trip details');
@@ -162,6 +165,10 @@ try{
  assert.equal(await page.evaluate(()=>window.__invoiceUrl),'/erpv2/company/finance/invoices/1/modal-view','invoice uses the ERP base path');
  await page.evaluate(()=>window.closeModal('invoice-view-modal'));
  assert.equal(await page.locator('#rp-list tr[data-id="101"]').evaluate(row=>document.activeElement===row),true,'focus returns to row');
+ await page.locator('#rp-list tr[data-id="102"]').dblclick();
+ const blockers=await page.locator('#rp-detail-modal #rp-detail-content').innerText();
+ for(const expected of ['АКТ/УПД','Обработано 1 из 2 заявок','нет скана ТН']) assert.ok(blockers.includes(expected),`carrier popup shows ${expected}`);
+ await page.evaluate(()=>window.closeModal('rp-detail-modal'));
  await page.locator('#rp-hide-complete').uncheck();
  await page.locator('.rp-standard-box .lab-reference-trigger').click();
  await page.locator('.rp-standard-box [role=option][data-value="date-new"]').click();
@@ -184,7 +191,7 @@ try{
      assert.ok(Math.abs(fixedColumns[0]-64)<=1&&Math.abs(fixedColumns[1]-240)<=1,`${width}: canonical 64px ID and 240px trip widths, got ${fixedColumns}`);
    }
    if(width===390){
-     const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[4,5,6,7,10,11,12,13].map(index=>Math.round(row.cells[index-1].querySelector('.registry-ui-value')?.getBoundingClientRect().left||0)));
+     const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[4,5,6,7,10,11,13].map(index=>Math.round(row.cells[index-1].querySelector('.registry-ui-value')?.getBoundingClientRect().left||0)));
      assert.equal(new Set(columns).size,1,'mobile values share one aligned column');
    }
    if(width===1280){

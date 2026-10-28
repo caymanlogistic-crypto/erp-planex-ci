@@ -67,6 +67,18 @@ UI_QUALITY_CONTRACT = {
 }
 
 PRESETS = {
+    "finance-received-paid": {
+        "label": "Получено/оплачено",
+        "target_route": "/company/finance/received-paid",
+        "renderer": ["php", "tests/fixtures/finance_received_paid_design_lab_render.php"],
+        "source_paths": [
+            "app/View/partials/finance_received_paid_ledger.php",
+            "app/View/pages/company_finance_received_paid.php",
+            "public/assets/css/finance-received-paid.css",
+            "public/assets/js/finance-received-paid.js",
+            "tests/fixtures/finance_received_paid_design_lab_render.php",
+        ],
+    },
     "ui-standard": {
         "label": "Согласованный интерфейс ERP PLANEX",
         "target_route": "/ui-standard",

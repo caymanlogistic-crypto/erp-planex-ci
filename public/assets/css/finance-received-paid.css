@@ -104,31 +104,6 @@
 .rp-paid--partial{color:#956b23}
 .rp-paid--none{color:#6c6964}
 .rp-paid--unknown{color:#655592}
-#rp-detail-modal .modal:has(.rp-details-body){width:min(1100px,calc(100vw - 32px));max-width:1100px}
-#rp-detail-title{min-width:0;overflow-wrap:anywhere}
-.rp-details-body{padding:0!important}
-.rp-details-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:0}
-.rp-finance-pane{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(68px,1fr) minmax(68px,1fr);min-width:0;border:0;background:var(--surface-strong,#fff)}
-.rp-finance-pane+.rp-finance-pane{border-left:1px solid var(--line-soft)}
-.rp-finance-section{min-width:0}
-.rp-finance-section:nth-child(4){background:#faf9f6}
-.rp-finance-head{padding:9px 11px;background:#f4f1eb;border-bottom:1px solid var(--line-soft)}
-.rp-finance-head>span{font-size:10px;color:#746f66}.rp-finance-head h3{margin:2px 0 0;font-size:12px;line-height:1.3;overflow-wrap:anywhere}
-.rp-finance-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;padding:8px 10px;background:#fff;border-bottom:1px solid var(--line-soft)}
-.rp-finance-metrics>div{min-width:0;padding:0 7px}.rp-finance-metrics>div+div{border-left:1px solid var(--line-soft)}
-.rp-finance-metrics dt{font-size:10px;color:#746f66}.rp-finance-metrics dd{margin:3px 0 0;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-.rp-finance-section{padding:9px 11px;border-bottom:1px solid var(--line-soft)}
-.rp-finance-section .rp-detail-create{display:block;margin-top:10px;min-height:28px;padding:0 10px;font-size:11px}
-.rp-finance-section h4{margin:0 0 6px;font-size:10px;font-weight:800;letter-spacing:.035em;text-transform:uppercase;color:#746f66}
-.rp-finance-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.rp-finance-section-head .rp-add-link{margin:0;flex:none;font-size:10px}
-.rp-detail-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:baseline;gap:8px;padding:4px 0;font-size:11px}
-.rp-detail-line+.rp-detail-line{border-top:1px solid #eeeae3}
-.rp-detail-line>*{min-width:0}.rp-detail-line>span{color:#746f66;white-space:nowrap}.rp-detail-line>strong{font-variant-numeric:tabular-nums;white-space:nowrap}
-.rp-detail-line .rp-invoice-link{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rp-detail-empty{margin:2px 0;color:#817c74;font-size:11px}
-.rp-finance-balance{display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 11px;background:#f8f6f2;color:#68635d;font-size:10px}
-.rp-finance-balance strong{color:#2f2d2a;font-variant-numeric:tabular-nums}
 @media(max-width:1400px){
   .rp-compact-table col.rp-w-date,.rp-compact-table th:nth-child(3),.rp-compact-table td:nth-child(3),.rp-compact-table th:nth-child(4),.rp-compact-table td:nth-child(4){display:none}
   .rp-compact-table col.rp-w-desc{width:17%}.rp-compact-table col.rp-w-party{width:16%}
@@ -138,9 +113,6 @@
   .rp-hint-desktop{display:none}.rp-hint-mobile{display:inline}
   .rp-compact-table col.rp-w-party,.rp-compact-table col.rp-w-rate,.rp-compact-table col.rp-w-invoice,.rp-compact-table th:nth-child(5),.rp-compact-table td:nth-child(5),.rp-compact-table th:nth-child(6),.rp-compact-table td:nth-child(6),.rp-compact-table th:nth-child(7),.rp-compact-table td:nth-child(7),.rp-compact-table th:nth-child(9),.rp-compact-table td:nth-child(9),.rp-compact-table th:nth-child(10),.rp-compact-table td:nth-child(10),.rp-compact-table th:nth-child(11),.rp-compact-table td:nth-child(11){display:none}
   .rp-compact-table col.rp-w-id{width:11%}.rp-compact-table col.rp-w-desc{width:49%}.rp-compact-table col.rp-w-paid{width:20%}
-  .rp-details-sides{grid-template-columns:1fr}
-  .rp-finance-pane{display:block}
-  .rp-finance-pane+.rp-finance-pane{border-left:0;border-top:1px solid var(--line-soft)}
 }
 
 /* Accepted received/paid ledger v015. Typography inherits the ERP system font. */
@@ -161,15 +133,6 @@
 .rp-ledger-v015 .rp-v010-table tfoot td{height:32px;min-height:32px;padding:5px 6px;background:#eeeae3;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:visible}
 .rp-ledger-v015 .rp-v010-table tfoot td:first-child{white-space:nowrap}
 .rp-ledger-v015 .rp-v010-empty{padding:28px 12px;text-align:center;color:#746f66}
-#rp-detail-modal .rp-v014-detail-invoice{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
-#rp-detail-modal .rp-v014-invoice-identity{display:block;min-width:0;overflow-wrap:anywhere}
-#rp-detail-modal .rp-v014-invoice-identity .rp-invoice-link,#rp-detail-modal .rp-v014-invoice-identity small{display:block;white-space:normal;overflow:visible;text-overflow:clip}
-#rp-detail-modal .rp-v014-invoice-identity small{margin-top:2px;color:#746f66;font-size:11px}
-#rp-detail-modal .rp-v014-detail-invoice>strong{margin-left:auto;text-align:right;white-space:normal;overflow-wrap:anywhere}
-#rp-detail-modal .rp-v015-detail-driver{margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#746f66;font-size:11px}
-#rp-detail-modal .rp-v011-detail-due{display:flex;justify-content:space-between;gap:12px;padding:9px 11px;border-bottom:1px solid var(--line-soft)}
-#rp-detail-modal .rp-details-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px;padding:8px 11px;background:#fffdf9;border-bottom:1px solid var(--line-soft);color:#625c53;font-size:11px}
-#rp-detail-modal .rp-details-meta span:last-child{text-align:right}
 @media(min-width:1051px) and (max-width:1599px){
  .rp-ledger-v015 .rp-v010-table colgroup,.rp-ledger-v015 .rp-v012-wide-head{display:none}
  .rp-ledger-v015 .rp-v010-table thead,.rp-ledger-v015 .rp-v010-table tbody,.rp-ledger-v015 .rp-v010-table tfoot{display:block}
@@ -271,42 +234,9 @@
   .rp-compact-table th:nth-child(13),.rp-compact-table td:nth-child(13){display:none}
 }
 
-/* Trip details match the accepted v015 dialog geometry. */
+/* Popup typography, surfaces and controls are owned by registry-components.css. */
 #rp-detail-modal{z-index:1050}
 #invoice-view-modal{z-index:1060}
-#rp-detail-modal .modal:has(.rp-details-body){width:min(980px,calc(100vw - 32px));max-width:980px}
-#rp-detail-modal .modal-head,#invoice-view-modal .modal-head{padding:13px 16px;background:#f7f5f0;border-bottom:1px solid #d5cec3}
-#rp-detail-modal .modal-title,#invoice-view-modal .modal-title{font-size:16px;line-height:1.3;font-weight:700;overflow-wrap:anywhere}
-#rp-detail-modal .modal-close,#invoice-view-modal .modal-close{width:28px;height:28px;flex:none;font-size:18px;color:#655e55}
-#rp-detail-modal .modal-foot,#invoice-view-modal .modal-foot{min-height:38px;padding:6px 14px;background:#f7f5f0;border-top:1px solid #d5cec3}
-#rp-detail-modal .rp-details-meta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 14px;padding:10px 16px;background:#fffdf9;border-bottom:1px solid #e5ded4;color:#5c554d;font-size:11px;font-weight:600}
-#rp-detail-modal .rp-details-meta span{font-weight:500;color:#68625a}
-#rp-detail-modal .rp-details-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;background:#fffdf9}
-#rp-detail-modal .rp-finance-pane{display:flex;flex-direction:column;min-width:0;background:#fffdf9}
-#rp-detail-modal .rp-finance-pane+.rp-finance-pane{border-left:1px solid #d5cec3}
-#rp-detail-modal .rp-finance-head{min-height:64px;box-sizing:border-box;padding:12px 16px;background:#f7f5f0;border-bottom:1px solid #e5ded4}
-#rp-detail-modal .rp-finance-head>span{display:block;margin-bottom:5px;color:#7a6d5d;font-size:11px;font-weight:600}
-#rp-detail-modal .rp-finance-head h3{margin:0;color:#2e2923;font-size:14px;line-height:1.35;font-weight:700;overflow-wrap:anywhere}
-#rp-detail-modal .rp-finance-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:13px 16px;background:#fffdf9;border-bottom:1px solid #e5ded4}
-#rp-detail-modal .rp-finance-metrics>div{min-width:0;padding:0;border:0}
-#rp-detail-modal .rp-finance-metrics>div+div{border-left:0}
-#rp-detail-modal .rp-finance-metrics dt{font-size:10px;line-height:1.3;color:#817b72}
-#rp-detail-modal .rp-finance-metrics dd{margin:4px 0 0;font-size:14px;line-height:1.25;font-weight:700;white-space:normal;overflow-wrap:anywhere}
-#rp-detail-modal .rp-v011-detail-due{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 16px;background:#fffdf9;border-bottom:1px solid #e5ded4;font-size:12px}
-#rp-detail-modal .rp-v011-detail-due>span:first-child{min-width:0}
-#rp-detail-modal .rp-v011-detail-due .rp-v010-date{flex:none;text-align:right;white-space:nowrap}
-#rp-detail-modal .rp-v011-detail-due .rp-v010-date strong,#rp-detail-modal .rp-v011-detail-due .rp-v010-date small{display:block}
-#rp-detail-modal .rp-v011-detail-due .rp-v010-date small{font-size:11px}
-#rp-detail-modal .rp-finance-section{flex:1;min-width:0;padding:12px 16px;background:#fffdf9;border-bottom:1px solid #e5ded4}
-#rp-detail-modal .rp-finance-section:last-child{border-bottom:0}
-#rp-detail-modal .rp-finance-section h4{margin:0 0 8px;font-size:11px;line-height:1.35;font-weight:700;letter-spacing:.015em;color:#60584f}
-#rp-detail-modal .rp-detail-line{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:4px 12px;padding:5px 0;font-size:12px;line-height:1.45}
-#rp-detail-modal .rp-detail-line>*{min-width:0;overflow-wrap:anywhere}
-#rp-detail-modal .rp-detail-line>strong{grid-column:1/-1;color:#68625a;font-size:11px;font-weight:500}
-#rp-detail-modal .rp-detail-line>span{white-space:normal;color:#68625a}
-#rp-detail-modal .rp-invoice-link{justify-self:start;white-space:normal;text-align:left;font-size:12px;font-weight:700;color:#7c4718}
-#rp-detail-modal .rp-detail-empty{margin:0;font-size:12px;line-height:1.45;color:#817b72}
-@media(max-width:900px){#rp-detail-modal .rp-details-sides{grid-template-columns:1fr}#rp-detail-modal .rp-finance-pane+.rp-finance-pane{border-left:0;border-top:1px solid #d5cec3}}
 
 /* OWNER accepted Design Lab finance v006; production ledger retained. */
 /* Finance keeps its 13-column responsive layout inside the shared registry frame. */

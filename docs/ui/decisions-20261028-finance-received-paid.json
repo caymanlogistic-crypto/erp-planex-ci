@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-28",
+  "owner_decision": "Publish accepted Design Lab carrier-paid-status-lab-20261028-c:v003",
+  "route": "/company/finance/received-paid",
+  "shared_variant": ".registry-ui-modal--finance",
+  "scope": ["carrier payment caption", "trip popup", "invoice creation popup", "invoice view popup"],
+  "payment_caption": {
+    "unpaid_or_partial_complete_documents": "ожидает оплаты",
+    "unpaid_or_partial_incomplete_documents": "оплата заблок.",
+    "fully_paid": ""
+  },
+  "readiness_source": "WasteTripClosingService: four mandatory document slots and processed requests/TN",
+  "blocker_details": ["missing mandatory document names", "processed versus total requests", "specific TN errors"],
+  "canonical_assets": ["public/assets/css/registry-components.css", "public/assets/js/registry-components.js"],
+  "accepted_checkpoint": "C:/plan-ex/ERP-PLANEX/local/design-lab/carrier-paid-status-lab-20261028-c/versions/v003"
+}
