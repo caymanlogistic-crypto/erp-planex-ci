@@ -109,10 +109,56 @@ final class DriverTsDataService
         $targets[] = ['crew', (int)$crew['crew_id']];
         $clauses = [];
         $params = [];
-        foreach ($targets as [$type, $id]) { $clauses[] = '(entity_type=? AND entity_id=?)'; $params[]=$type; $params[]=$id; }
-        $stmt = $this->pdo->prepare('SELECT id, entity_type, entity_id, document_type, original_name, relative_path, file_size, mime_type FROM documents WHERE deleted_at IS NULL AND ('.implode(' OR ', $clauses).') ORDER BY id');
+        foreach ($targets as [$type, $id]) { $clauses[] = '(d.entity_type=? AND d.entity_id=?)'; $params[]=$type; $params[]=$id; }
+        $stmt = $this->pdo->prepare('SELECT d.id, d.entity_type, d.entity_id, d.document_type, dt.code AS document_code, d.original_name, d.relative_path, d.file_size, d.mime_type FROM documents d LEFT JOIN document_types dt ON dt.id=d.document_type_id WHERE d.deleted_at IS NULL AND ('.implode(' OR ', $clauses).') ORDER BY d.id');
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** Use the same semantic document names and duplicate suffixes as the emailed ZIP. */
+    public static function archiveDocumentNames(array $detail): array
+    {
+        $primary = $detail['units'][(int)$detail['primary_id']] ?? [];
+        $secondary = $detail['units'][(int)$detail['secondary_id']] ?? [];
+        $driver = self::primaryDriverName($detail);
+        $package = [
+            'driver' => $driver,
+            'plate' => (string)($primary['plate_number'] ?? ''),
+            'secondary_plate' => (string)($secondary['plate_number'] ?? ''),
+        ];
+        $codes = [
+            'Паспорт' => 'passport', 'Водительское удостоверение' => 'driver_license',
+            'СНИЛС' => 'snils', 'СТС' => 'sts', 'Свидетельство о регистрации' => 'registration_certificate',
+            'Диагностическая карта' => 'diagnostic_card', 'Фотография' => 'photo', 'Фото' => 'photo',
+        ];
+        $attachments = [];
+        foreach ($detail['files'] as $doc) {
+            $code = trim((string)($doc['document_code'] ?? ''));
+            if ($code === '') $code = $codes[trim((string)($doc['document_type'] ?? ''))] ?? '';
+            $role = (string)($doc['entity_type'] ?? '') === 'vehicle_unit' && (int)($doc['entity_id'] ?? 0) === (int)($detail['secondary_id'] ?? 0) ? 'secondary' : 'primary';
+            $attachments[] = [
+                'key' => $code === '' ? '' : 'predef_doc['.$role.']['.$code.'][]',
+                'name' => (string)$doc['original_name'],
+            ];
+        }
+        return RouteExecutorReviewArchive::names($attachments, $package);
+    }
+
+    public static function archiveDownloadName(array $detail): string
+    {
+        $driver = self::primaryDriverName($detail);
+        $plate = trim((string)($detail['units'][(int)$detail['primary_id']]['plate_number'] ?? ''));
+        $name = trim($driver.' '.$plate);
+        $name = trim((string)preg_replace('/[\\\\\/\x00-\x1f:<>"|?*]+/u', ' ', $name));
+        return ($name !== '' ? $name : 'Данные водителя и ТС').'.zip';
+    }
+
+    private static function primaryDriverName(array $detail): string
+    {
+        foreach ($detail['drivers'] as $driver) {
+            if ((int)($driver['id'] ?? 0) === (int)($detail['driver_id'] ?? 0)) return trim((string)($driver['full_name'] ?? ''));
+        }
+        return trim((string)($detail['drivers'][0]['full_name'] ?? ''));
     }
 
     /** Same labels and values feed the popup and the workbook. */

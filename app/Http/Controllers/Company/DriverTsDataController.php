@@ -102,16 +102,16 @@ final class DriverTsDataController
             $zip=new ZipArchive();
             if ($zip->open($archivePath,ZipArchive::OVERWRITE)!==true) throw new RuntimeException('Не удалось открыть архив.');
             $zip->addFile($workbookPath,'Данные водителя и ТС.xlsx');
-            foreach ($detail['files'] as $doc) {
+            $names=DriverTsDataService::archiveDocumentNames($detail);
+            foreach ($detail['files'] as $index=>$doc) {
                 $path=DocumentService::resolveStoredPath($context[0],(string)$doc['relative_path']);
                 if ($path===null) throw new RuntimeException('Один из файлов исполнителя недоступен.');
-                $name=DocumentService::safeDownloadName((string)$doc['original_name']);
-                $zip->addFile($path,sprintf('%03d-',(int)$doc['id']).$name);
+                if (!$zip->addFile($path,$names[$index])) throw new RuntimeException('Не удалось добавить файл в архив.');
             }
             if (!$zip->close()) throw new RuntimeException('Не удалось завершить архив.');
             header('Content-Type: application/zip');
             header('X-Content-Type-Options: nosniff');
-            header('Content-Disposition: attachment; filename="voditel-ts-'.(int)$id.'.zip"');
+            header('Content-Disposition: attachment; filename="driver-ts.zip"; filename*=UTF-8\'\''.rawurlencode(DriverTsDataService::archiveDownloadName($detail)));
             header('Content-Length: '.filesize($archivePath));
             readfile($archivePath);
         } catch (Throwable $e) { error_log('Driver TS archive failed: '.$e->getMessage()); if (!headers_sent()) http_response_code(500); }
