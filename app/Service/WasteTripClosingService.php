@@ -117,9 +117,11 @@ final class WasteTripClosingService
     }
 
     /** @return list<array<string,mixed>> */
-    public static function trips(PDO $pdo): array
+    public static function trips(PDO $pdo, ?int $prioritizeTripId = null): array
     {
         $scope = self::closingVisibilityScope();
+        $prioritizeTripId = $prioritizeTripId !== null && $prioritizeTripId > 0 ? $prioritizeTripId : null;
+        $order = $prioritizeTripId === null ? 'wt.business_id DESC' : '(wt.id = ?) DESC, wt.business_id DESC';
         $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.comment,wt.status,wt.actual_start_date,wt.actual_end_date,wt.legal_entity_code,
                 wt.route_executor_id,
                 ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
@@ -132,8 +134,8 @@ final class WasteTripClosingService
               LEFT JOIN users u ON u.id=wt.responsible_user_id
               LEFT JOIN waste_trip_closing_reviews r ON r.waste_trip_id=wt.id
              WHERE wt.deleted_at IS NULL AND ".self::allowedStatusesSql()." AND {$scope['sql']}
-             ORDER BY wt.business_id DESC LIMIT 500");
-        $stmt->execute($scope['params']);
+             ORDER BY {$order} LIMIT 500");
+        $stmt->execute($prioritizeTripId === null ? $scope['params'] : [...$scope['params'], $prioritizeTripId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (!$rows) return [];
         $ids=array_map(static fn(array $row):int=>(int)$row['id'],$rows);

@@ -121,9 +121,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "81f7677cdd67a1e6526bd9f67c1c67e5e098d861",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/81f7677cdd67a1e6526bd9f67c1c67e5e098d861/tests/finance_received_paid_closing_readiness_mysql_test.php",
-      "verification_note": "2026-10-28: finance received/paid uses closing-document completeness from WasteTripClosingService. Isolated MySQL checks cover four required files, deleted files, processed requests and TN errors; accepted Design Lab v003 parity and popup browser checks pass.",
+      "verified_sha": "c308b4e70c8011f684a0b269a753edf8b8adec59",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c308b4e70c8011f684a0b269a753edf8b8adec59/tests/waste_trip_closing_ui_browser_test.mjs",
+      "verification_note": "2026-10-28: finance carrier popup badges link to the selected closing trip; the target search and document dialog select that trip despite saved filters, and old trips are prioritized inside the visibility-scoped 500-row registry. Focused finance and closing browser checks, closing view checks, and isolated closing-payment/readiness MySQL checks pass locally.",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Service/RegistryManagerPresentation.php",
