@@ -30,6 +30,20 @@
   const activeTab=filters.find(button=>button.dataset.closingFilter===filter);
   if(tabs&&activeTab) requestAnimationFrame(()=>{const delta=activeTab.getBoundingClientRect().right-tabs.getBoundingClientRect().right;if(delta>0)tabs.scrollLeft+=delta;});
   const requestedTripId=new URLSearchParams(location.search).get('trip_id');
+  const requestedTrip=trips.find(trip=>trip.dataset.tripId===requestedTripId);
+  if(requestedTrip) {
+    search.value=requestedTrip.dataset.businessId||'';
+    page.addEventListener('registry:state',()=>{
+      // The shared registry restores saved controls after this script runs.
+      // An explicit trip link takes precedence over those saved filters.
+      if(entity) entity.value='all';
+      if(quarter) quarter.value='';
+      if(manager) manager.value='';
+      filters.find(button=>button.dataset.closingFilter==='all')?.click();
+      search.value=requestedTrip.dataset.businessId||'';
+      search.dispatchEvent(new Event('input',{bubbles:true}));
+    },{once:true});
+  }
   const openTripId=requestedTripId||savedState?.openTripId;
   if(openTripId || (savedState && Object.hasOwn(savedState,'openTripId'))) {
     trips.forEach(trip=>{trip.open=trip.dataset.tripId===openTripId;});
