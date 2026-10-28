@@ -206,6 +206,7 @@ trait DocumentGeneratorDataTrait
             'trailer.vin'=>!empty($t['vin_absent']) ? 'отсутствует' : (string)($t['vin'] ?? ''),
             'trailer.display'=>(string)($t['display'] ?? ''),
             'service.description'=>(string)($service['description'] ?? ''),
+            'service.route'=>(string)($service['route'] ?? ''),
             'service.amount'=>self::formatMoneyAccounting($serviceAmountRaw),
             'service.amount_ru'=>str_replace('.', ',', self::formatMoneyAccounting($serviceAmountRaw)),
             'service.amount_ru_compact'=>str_replace(' ', '', str_replace('.', ',', self::formatMoneyAccounting($serviceAmountRaw))),
@@ -283,7 +284,7 @@ trait DocumentGeneratorDataTrait
             'vehicle.label'=>'Тип транспортного средства','vehicle.model'=>'Марка/модель транспортного средства','vehicle.plate'=>'Государственный номер транспортного средства','vehicle.vin'=>'VIN транспортного средства',
             'trailer.label'=>'Тип прицепа/полуприцепа','trailer.model'=>'Марка/модель прицепа/полуприцепа','trailer.plate'=>'Государственный номер прицепа/полуприцепа','trailer.vin'=>'VIN прицепа/полуприцепа','trailer.display'=>'Данные прицепа/полуприцепа',
             'contract.date'=>'Дата договора','contract.start_date'=>'Дата начала аренды','contract.finish_date'=>'Плановая дата завершения','contract.price'=>'Стоимость','contract.vat_mode'=>'Режим НДС','contract.payment_terms'=>'Условия оплаты',
-            'invoice.number'=>'Номер счёта','invoice.date'=>'Дата счёта','act.number'=>'Номер акта','act.date'=>'Дата акта','upd.number'=>'Номер УПД','upd.date'=>'Дата УПД','service.description'=>'Описание услуги','service.amount'=>'Сумма услуги','service.amount_words'=>'Сумма прописью','service.vat_mode'=>'Режим НДС',
+            'invoice.number'=>'Номер счёта','invoice.date'=>'Дата счёта','act.number'=>'Номер акта','act.date'=>'Дата акта','upd.number'=>'Номер УПД','upd.date'=>'Дата УПД','service.description'=>'Описание услуги','service.route'=>'Маршрут услуги','service.amount'=>'Сумма услуги','service.amount_words'=>'Сумма прописью','service.vat_mode'=>'Режим НДС',
             'waybill.number'=>'Номер путевого листа','waybill.date'=>'Дата путевого листа','requests.count'=>'Количество заявок','requests.total_mass_kg'=>'Общая масса заявок','requests.unload_address'=>'Адрес выгрузки',
         ];
         $label=$labels[$name] ?? $name;
@@ -317,7 +318,7 @@ trait DocumentGeneratorDataTrait
             if (in_array('request.mass_kg',$placeholders,true) && ($row['mass_netto'] ?? null)===null) $items[]='нет массы';
             if (in_array('request.sender',$placeholders,true) && trim((string)($row['naim_oo_gruzootpravitel'] ?? ''))==='') $items[]='нет грузоотправителя';
             if (in_array('request.loading_address',$placeholders,true) && trim((string)($row['document_loading_address'] ?? $row['mno_adres_pogruzki'] ?? ''))==='') $items[]='нет адреса погрузки';
-            if (in_array('requests.unload_address',$placeholders,true) && trim((string)($row['adres_vygruzki_otkhodov'] ?? ''))==='') $items[]='нет места выгрузки';
+            if (in_array('requests.unload_address',$placeholders,true) && trim((string)($row['document_unloading_address'] ?? $row['adres_vygruzki_otkhodov'] ?? ''))==='') $items[]='нет места выгрузки';
             if ($items!==[]) $errors[$id]=$items;
         }
         return $errors;
@@ -327,7 +328,7 @@ trait DocumentGeneratorDataTrait
     {
         $groups=[];
         foreach ($rows as $row) {
-            $address=preg_replace('/\s+/u',' ',trim((string)($row['adres_vygruzki_otkhodov'] ?? ''))) ?? '';
+            $address=preg_replace('/\s+/u',' ',trim((string)($row['document_unloading_address'] ?? $row['adres_vygruzki_otkhodov'] ?? ''))) ?? '';
             if ($address==='') continue;
             $groups[$address]=($groups[$address] ?? 0)+1;
         }

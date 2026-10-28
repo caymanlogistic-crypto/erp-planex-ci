@@ -67,18 +67,18 @@ final class DocumentGeneratorWarehouseLoadingService
         return array_values(array_unique(preg_split('/[\s,;]+/u', trim($list), -1, PREG_SPLIT_NO_EMPTY) ?: []));
     }
 
-    private static function warehouseAddress(PDO $legacy, int $warehouseId): string
+    public static function warehouseAddress(PDO $legacy, int $warehouseId): string
     {
         $columns = $legacy->query('SHOW COLUMNS FROM warehouses')->fetchAll(PDO::FETCH_COLUMN);
         $addressColumn = null;
-        foreach (['full_address', 'address', 'warehouse_address', 'adres', 'adres_sklada', 'location_address', 'physical_address', 'name'] as $candidate) {
+        foreach (['full_address', 'address', 'warehouse_address', 'adres', 'adres_sklada', 'location_address', 'physical_address'] as $candidate) {
             if (in_array($candidate, $columns, true)) { $addressColumn = $candidate; break; }
         }
-        if ($addressColumn === null) throw new RuntimeException('В карточке склада не найден адрес для договора перевозчика.');
+        if ($addressColumn === null) throw new RuntimeException('В карточке склада не найден адрес для документа.');
         $warehouse = $legacy->prepare('SELECT `'.$addressColumn.'` FROM warehouses WHERE id=? LIMIT 1');
         $warehouse->execute([$warehouseId]);
         $address = trim((string)$warehouse->fetchColumn());
-        if ($address === '') throw new RuntimeException('Не заполнен адрес склада-источника выбранного рейса.');
+        if ($address === '') throw new RuntimeException('Не заполнен адрес склада выбранного рейса.');
         return $address;
     }
 

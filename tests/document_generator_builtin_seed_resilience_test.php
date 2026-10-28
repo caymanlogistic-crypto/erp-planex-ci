@@ -73,7 +73,7 @@ try{
 
     $reset();
     $userTemplate('waybill_driver_assignment','Пользовательский waybill','waybill_driver_assignment_v1.docx');
-    $s=$stash('contract_vehicle_lease_crew_v5.docx');
+    $s=$stash('contract_vehicle_lease_crew_v9.docx');
     try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),8,'C all except missing carrier contract visible');$eq(count($warnings()),1,'C warning');$renderSaved('waybill_driver_assignment');$renderSaved('client_sublease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{$restore($s);}
     echo "SEED_CASE_C=PASS\n";
 
@@ -110,7 +110,7 @@ try{
     $userTemplate('carrier_sublease_crew','Договор субаренды','contract_carrier_sublease_crew_v1.docx');
     App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
     $active=[];foreach($rows() as $row)$active[$row['document_type']]=$row;
-    $eq((string)$active['vehicle_lease_crew']['sha256'],'464074c526ec0d7a387d46c017ad359a94771163cb7a7f076954fc529a673535','H lease upgraded');
+    $eq((string)$active['vehicle_lease_crew']['sha256'],'e83efd9117faf61357fb4dfb9e105c4a989f7bbed9fe062d84355c18dc0df79f','H lease upgraded');
     $eq((string)$active['carrier_sublease_crew']['sha256'],'b3f1068c42b9a9659f4774934eeb8924cf20c58e83e44a9298df98f3e35c0be7','H sublease upgraded');
     $eq((int)$pdo->query("SELECT COUNT(*) FROM document_template_versions")->fetchColumn(),11,'H old versions retained');
     App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
@@ -121,7 +121,7 @@ try{
     $userTemplate('vehicle_lease_crew','Договор аренды','contract_vehicle_lease_crew_v4.docx');
     App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
     $active=[];foreach($rows() as $row)$active[$row['document_type']]=$row;
-    $eq((string)$active['vehicle_lease_crew']['sha256'],'464074c526ec0d7a387d46c017ad359a94771163cb7a7f076954fc529a673535','I v4 lease upgraded to v5');
+    $eq((string)$active['vehicle_lease_crew']['sha256'],'e83efd9117faf61357fb4dfb9e105c4a989f7bbed9fe062d84355c18dc0df79f','I v4 lease upgraded to v9');
     $eq((int)$pdo->query("SELECT COUNT(*) FROM document_template_versions WHERE template_id=".(int)$active['vehicle_lease_crew']['id'])->fetchColumn(),2,'I prior v4 retained');
     echo "SEED_CASE_I=PASS\nDOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS\n";
 }finally{$rm($store);try{if($ownsDatabase)$admin->exec("DROP DATABASE IF EXISTS $qd");elseif(isset($pdo))cleanCompanyPoolDatabase($pdo);}catch(Throwable){}}

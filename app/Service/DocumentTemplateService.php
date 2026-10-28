@@ -44,7 +44,7 @@ final class DocumentTemplateService
         'driver.full_name', 'driver.passport', 'driver.license', 'driver.signature_name',
         'vehicle.label', 'vehicle.model', 'vehicle.plate', 'vehicle.vin',
         'trailer.label', 'trailer.model', 'trailer.plate', 'trailer.vin', 'trailer.display',
-        'service.description', 'service.amount', 'service.amount_ru', 'service.amount_ru_compact', 'service.amount_words', 'service.vat_mode',
+        'service.description', 'service.route', 'service.amount', 'service.amount_ru', 'service.amount_ru_compact', 'service.amount_words', 'service.vat_mode',
         'trip.business_id',
         'requests.count', 'requests.total_mass_kg', 'requests.unload_address',
         'request.index', 'request.id', 'request.mass_kg', 'request.sender',
