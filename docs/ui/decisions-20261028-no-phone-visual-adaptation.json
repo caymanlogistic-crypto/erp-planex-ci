@@ -1,0 +1,20 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "owner-no-phone-visual-adaptation-20261028",
+  "date": "2026-10-28",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "quote": "МЫ НЕ АДАПТИРУЕМ ДЛЯ ТЕЛЕФОНА ИЗОБРАЖЕНИЯ!!! ТОЛЬКО ПО ДТДЕЛЬНОМЦ УКАЗИНИЮ!!!!!!"
+  },
+  "scope": [
+    "ERP PLANEX visual tasks: images, screenshots, visual layouts and interface composition"
+  ],
+  "supersedes": [
+    "Any generic instruction interpreted as authorization to create a phone-specific visual adaptation without a separate OWNER request"
+  ],
+  "approved": {
+    "rule": "Do not adapt visual presentation for phones, including images or popup layouts, unless the OWNER explicitly requests that scope separately.",
+    "regression_boundary": "Existing 390px automated checks remain regression checks. They do not authorize phone-only controls or redesign."
+  }
+}

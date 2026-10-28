@@ -398,7 +398,7 @@
       }],
       "table_states": [{"id":"initial","visible":["main"],"data":{"main":"populated"}}],
       "async_search": {"applicable":false,"reason":"Поиск выполняется локально по загруженным строкам."},
-      "contract_sources": ["app/Service/DriverTsDataService.php", "tests/driver_ts_data_mysql_test.php"]
+      "contract_sources": ["app/Service/DriverTsDataService.php", "app/View/partials/driver_ts_data_detail.php", "tests/driver_ts_data_mysql_test.php"]
     },
     {
       "id": "trips-departures",

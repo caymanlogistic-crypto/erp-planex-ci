@@ -656,15 +656,22 @@
 .driver-ts-data-dialog:not([open]){display:none}
 .driver-ts-data-dialog .modal-body{overflow:auto;min-height:0}
 .driver-ts-data-dialog .page-eyebrow{display:block;margin:0 0 6px}
-.driver-ts-data-dialog .registry-ui-modal-preview .page-eyebrow:not(:first-child){margin-top:12px}
-.driver-ts-fields{display:grid;grid-template-columns:minmax(110px,42%) minmax(0,1fr);gap:4px 8px;margin:0;font:500 12px/16.8px var(--font)}
+.driver-ts-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;align-items:start}
+.driver-ts-summary-group{min-width:0}
+.driver-ts-fields{display:grid;grid-template-columns:minmax(100px,46%) minmax(0,1fr);gap:2px 6px;margin:0;font:500 12px/16.8px var(--font)}
 .driver-ts-fields dt{color:#675f55}
 .driver-ts-fields dd{margin:0;overflow-wrap:anywhere;color:#131210}
+.driver-ts-set-type{margin:6px 0 0;font:500 12px/16.8px var(--font);color:#131210}
+.driver-ts-files{margin-top:8px}
+.driver-ts-files-heading{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.driver-ts-data-dialog .driver-ts-files .registry-ui-compact-table-scroll{max-height:none;overflow:visible}
+.driver-ts-files-table tr[hidden]{display:none!important}
+.driver-ts-files-table :is(th,td){padding:5px 8px!important}
+.driver-ts-file-pages{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:4px;font:500 12px/16.8px var(--font)}
+.driver-ts-file-pages .btn{min-width:32px}
 .driver-ts-files-table th:first-child{width:30%!important}
 .driver-ts-files-table th:nth-child(2){width:42%!important}
 .driver-ts-files-table th:nth-child(3){width:28%!important}
 .driver-ts-files-table td:nth-child(2){white-space:normal!important;overflow-wrap:anywhere!important}
 .driver-ts-files-table td:last-child{white-space:normal}
-.driver-ts-preview{margin-top:8px;border:1px solid #a8a196}
-.driver-ts-preview iframe{display:block;width:100%;height:min(420px,50dvh);border:0;background:#fff}
-@media(max-width:700px){.driver-ts-card .table-scroll{overflow-x:auto}.driver-ts-card .driver-ts-data-table{min-width:720px}.driver-ts-data-dialog{max-height:calc(100dvh - 16px)}.driver-ts-files-table{min-width:0!important}.driver-ts-files-table :is(th,td){padding:6px!important}.driver-ts-files-table td:last-child .btn{margin:0 0 4px}}
+@media(max-width:700px){.driver-ts-card .table-scroll{overflow-x:auto}.driver-ts-card .driver-ts-data-table{min-width:720px}.driver-ts-data-dialog{max-height:calc(100dvh - 16px)}.driver-ts-files-table{min-width:0!important}.driver-ts-files-table td:last-child .btn{margin:0 0 4px}}

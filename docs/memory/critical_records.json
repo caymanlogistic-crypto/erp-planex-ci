@@ -162,9 +162,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "81f7677cdd67a1e6526bd9f67c1c67e5e098d861",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/81f7677cdd67a1e6526bd9f67c1c67e5e098d861/tests/fixtures/finance_received_paid_design_lab_render.php",
-      "verification_note": "2026-10-28: new deterministic finance Design Lab preset and renderer preserve synthetic-only preview. Design Lab contract, UI canon/catalog, browser and exact accepted-page parity checks pass before publication.",
+      "verified_sha": "d945f40f2fc7327542573f6e2617665301dabbef",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/commit/d945f40f2fc7327542573f6e2617665301dabbef",
+      "verification_note": "2026-10-28: OWNER phone-visual rule updates AGENTS.md; CI workflows, path classification and gates are unchanged. Parallel canonical PR #485 added a deterministic finance Design Lab preset and renderer with synthetic-only preview; its Design Lab contract, UI canon/catalog, browser and exact accepted-page parity checks passed. This task's driver/TS browser/runtime and ui_standard catalog checks passed before publication.",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",

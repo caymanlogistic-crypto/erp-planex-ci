@@ -14,8 +14,12 @@ $rows=[
 ];
 for ($i=20;$i<=54;$i++) $rows[]=['crew_id'=>$i,'created_at'=>'2026-10-20 12:00:00','driver_name'=>'Тестовый водитель '.$i,'driver_phone'=>'+7 900 000-'.sprintf('%02d',$i),'driver_email'=>'driver'.$i.'@example.test','primary_brand'=>'КАМАЗ','primary_plate'=>'А'.str_pad((string)$i,3,'0',STR_PAD_LEFT).'ВС77','primary_capacity'=>20,'primary_volume'=>86,'secondary_brand'=>null,'secondary_plate'=>null,'secondary_capacity'=>null,'secondary_volume'=>null,'responsible_name'=>'Гладких Карина Артуровна','trips'=>[400+$i]];
 if (($argv[1]??'')==='detail') {
- $detail=['crew_id'=>9,'trips'=>[345,346,347,348],'files'=>[['id'=>1,'document_type'=>'Паспорт водителя','original_name'=>'passport.pdf']]];
- $sections=['driver'=>[['ФИО','Иванов Иван'],['Телефон','+7 900 000-00-05'],['Email','ivanov@example.test']], 'vehicle'=>[['Марка','КАМАЗ'],['Госномер','А123АА77']]];
+ $files=[];for($i=1;$i<=7;$i++)$files[]=['id'=>$i,'document_type'=>$i<=2?'Паспорт':'Документ ТС','original_name'=>'document-'.$i.'.pdf'];
+ $detail=['crew_id'=>9,'trips'=>[345,346,347,348],'files'=>$files];
+ $sections=[
+  'driver'=>[['ФИО','Иванов Иван'],['Телефон','+7 900 000-00-05'],['Email','ivanov@example.test'],['СНИЛС','149-246-820 87'],['Серия и номер','9710 879379'],['Код подразделения','210-026'],['Кем выдан','ОТДЕЛОМ УФМС РОССИИ ПО ЧУВАШСКОЙ РЕСПУБЛИКЕ В МОСКОВСКОМ РАЙОНЕ ГОР. ЧЕБОКСАРЫ'],['Дата выдачи','27.05.2011'],['Номер ВУ','2131 935604'],['Категория ВУ',''],['Дата выдачи ВУ','26.07.2017'],['Срок действия ВУ',''],['Комментарий','']],
+  'vehicle'=>[['Тип комплекта','Сцепка'],['Тягач',''],['Марка','КАМАЗ'],['Модель','5490-s5'],['Госномер','К878ХХ21'],['Тип','tractor'],['VIN','XTC549005J2514373'],['СТС',''],['ПТС',''],['Диагностическая карта',''],['Полуприцеп',''],['Марка','SP'],['Модель','451'],['Госномер','АК597821'],['Тип','semi_trailer'],['VIN','X4TSP447PR6230025'],['Грузоподъёмность (т)','20.00'],['Объём кузова (м³)','93.00'],['Комментарий','']]
+ ];
  require BASE_PATH.'/app/View/partials/driver_ts_data_detail.php';return;
 }
 $db=new class([]) extends \App\Core\Database { public function connection(): PDO { throw new RuntimeException('Synthetic visual fixture has no database'); } };
