@@ -599,3 +599,51 @@
 .registry-ui-modal .registry-ui-compact-table--weight-single th:nth-child(3){width:55%}
 .registry-ui-modal .registry-ui-compact-table--weight-single tbody td{vertical-align:middle}
 .registry-ui-modal .registry-ui-compact-table--weight-single .field-input{width:100%;min-width:0}
+
+/* OWNER-accepted received/paid popup composition, Design Lab v003. */
+.registry-ui-table--finance tbody td.registry-ui-paid-status>.registry-ui-value{display:block;width:100%}
+.registry-ui-paid-status .registry-ui-secondary{margin-top:2px;overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;text-align:right}
+.registry-ui-modal--finance .modal-title{min-width:0;overflow-wrap:anywhere}
+.registry-ui-modal--finance .rp-lab-trip-meta{display:flex;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;margin-bottom:12px}
+.registry-ui-modal--finance .rp-lab-side{min-width:0;align-content:start;grid-template-columns:minmax(0,1fr)}
+.registry-ui-modal--finance .rp-lab-side>.registry-ui-modal-summary{margin:0}
+.registry-ui-modal--finance .rp-lab-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+.registry-ui-modal--finance .rp-lab-metric{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:4px 8px;align-items:start;min-width:0}
+.registry-ui-modal--finance .rp-lab-metrics .rp-lab-metric{display:flex;flex-direction:column;gap:3px}
+.registry-ui-modal--finance .rp-lab-record{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:baseline;min-width:0}
+.registry-ui-modal--finance .rp-lab-record>*{min-width:0;overflow-wrap:anywhere}
+.registry-ui-modal--finance .rp-lab-record>strong{text-align:right}
+.registry-ui-modal--finance .rp-lab-record .rp-v014-invoice-identity{display:flex;flex-wrap:wrap;gap:4px 8px}
+.registry-ui-modal--finance .rp-lab-record .rp-v014-invoice-identity small{font:500 11px/15.4px var(--font);color:#675f55}
+.registry-ui-modal--finance .rp-lab-record .rp-invoice-link{white-space:normal;text-align:left}
+.registry-ui-modal--finance .registry-ui-error{color:#872822}
+.registry-ui-modal--finance .rp-lab-invoice-form-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-content:start}
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.form-grid-2,
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.form-grid-3{display:contents}
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.section-title,
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.form-hint,
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.js-obligations-box,
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.form-alert,
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.field:has(textarea),
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.field.mt-section{grid-column:1/-1}
+.registry-ui-modal--finance .rp-lab-invoice-form-body>.form-grid-3>.field:first-child{grid-column:1/-1}
+.registry-ui-modal--finance .rp-lab-invoice-form-body .field{margin:0;min-width:0}
+.registry-ui-modal--finance .rp-lab-invoice-form-body .field-input,
+.registry-ui-modal--finance .rp-lab-invoice-form-body .field-select{width:100%;min-height:32px}
+.registry-ui-modal--finance .rp-lab-invoice-form-body .section-title{margin:8px 0 0;padding:0}
+.registry-ui-modal--finance .rp-lab-facts{grid-template-columns:repeat(2,minmax(0,1fr));min-width:0}
+.registry-ui-modal--finance .rp-lab-facts>.page-eyebrow{grid-column:1/-1}
+.registry-ui-modal--finance .rp-lab-facts .rp-lab-metric{display:flex;flex-direction:column;gap:3px}
+.registry-ui-modal--finance .rp-lab-section-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.registry-ui-modal--finance .rp-lab-section-head .btn{flex:none}
+@media(max-width:700px){
+  .registry-ui-modal--finance .rp-lab-invoice-form-body,
+  .registry-ui-modal--finance .rp-lab-facts{grid-template-columns:minmax(0,1fr)}
+  .registry-ui-modal--finance .rp-lab-invoice-form-body>.form-grid-3>.field:first-child,
+  .registry-ui-modal--finance .rp-lab-invoice-form-body>.section-title,
+  .registry-ui-modal--finance .rp-lab-invoice-form-body>.form-hint,
+  .registry-ui-modal--finance .rp-lab-invoice-form-body>.js-obligations-box,
+  .registry-ui-modal--finance .rp-lab-invoice-form-body>.form-alert,
+  .registry-ui-modal--finance .rp-lab-invoice-form-body>.field:has(textarea),
+  .registry-ui-modal--finance .rp-lab-invoice-form-body>.field.mt-section{grid-column:1}
+}

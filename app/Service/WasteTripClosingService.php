@@ -300,6 +300,73 @@ final class WasteTripClosingService
         return $result;
     }
 
+    /**
+     * Closing-document readiness for trips already authorized by the finance register.
+     * Uses the same four required slots and processed-request rule as section().
+     *
+     * @return array<int,array{status:string,missing:list<string>,processed:int,total:int,tn_issues:list<string>}>
+     */
+    public static function paymentReadinessForTrips(PDO $pdo, array $tripIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $tripIds), static fn(int $id): bool => $id > 0)));
+        if ($ids === []) return [];
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $documents = $pdo->prepare("SELECT c.waste_trip_id,c.slot_code
+            FROM waste_trip_closing_documents c
+            JOIN documents d ON d.id=c.document_id AND d.deleted_at IS NULL
+            WHERE c.waste_trip_id IN ($marks) AND c.deleted_at IS NULL
+              AND c.slot_code IN ('contract','invoice','act','waybill')");
+        $documents->execute($ids);
+        $present = [];
+        foreach ($documents->fetchAll(PDO::FETCH_ASSOC) as $document) {
+            $present[(int)$document['waste_trip_id']][(string)$document['slot_code']] = true;
+        }
+        $counts = self::processedCounts($pdo, $ids);
+        $issuesQuery = $pdo->prepare("SELECT wtr.waste_trip_id,fr.zayavka_id,
+                COALESCE(i.tn_absent,0) tn_absent,i.arrived_at,i.departed_at,
+                i.driver_signature_present,i.sender_signature_present,i.tn_datetime_status,i.recovery_source,
+                COUNT(doc.id) scan_count
+            FROM waste_trip_requests wtr
+            JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+            LEFT JOIN waste_trip_completion_documents doc
+              ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
+            WHERE wtr.removed_at IS NULL AND wtr.waste_trip_id IN ($marks)
+            GROUP BY wtr.id,wtr.waste_trip_id,fr.zayavka_id,i.tn_absent,i.arrived_at,i.departed_at,
+                i.driver_signature_present,i.sender_signature_present,i.tn_datetime_status,i.recovery_source");
+        $issuesQuery->execute($ids);
+        $issues = [];
+        foreach ($issuesQuery->fetchAll(PDO::FETCH_ASSOC) as $item) {
+            if ((int)$item['tn_absent'] === 1) continue;
+            $reasons = [];
+            if ((int)$item['scan_count'] === 0) $reasons[] = 'нет скана ТН';
+            if (!$item['arrived_at'] || !$item['departed_at']) $reasons[] = 'нет даты или времени';
+            if (in_array($item['tn_datetime_status'], ['partial', 'no'], true) && !$item['recovery_source']) $reasons[] = 'не указан источник восстановления';
+            if ((int)$item['driver_signature_present'] !== 1) $reasons[] = 'нет подписи водителя';
+            if ((int)$item['sender_signature_present'] !== 1) $reasons[] = 'нет подписи отправителя';
+            if ($reasons) {
+                $issues[(int)$item['waste_trip_id']][] = 'Заявка №' . $item['zayavka_id'] . ': ' . implode(', ', $reasons);
+            }
+        }
+        $result = [];
+        foreach ($ids as $id) {
+            $missing = [];
+            foreach (self::SLOTS as $slot => $label) {
+                if (!isset($present[$id][$slot])) $missing[] = $label;
+            }
+            $total = (int)($counts[$id]['request_count'] ?? 0);
+            $processed = (int)($counts[$id]['processed_count'] ?? 0);
+            $result[$id] = [
+                'status' => $missing === [] && $total > 0 && $processed >= $total ? 'ready' : 'incomplete',
+                'missing' => $missing,
+                'processed' => $processed,
+                'total' => $total,
+                'tn_issues' => $issues[$id] ?? [],
+            ];
+        }
+        return $result;
+    }
+
     public static function trip(PDO $pdo, int $tripId): array
     {
         $scope = self::closingVisibilityScope();

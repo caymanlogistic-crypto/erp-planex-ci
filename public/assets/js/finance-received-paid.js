@@ -71,13 +71,131 @@
   const details = document.getElementById('rp-detail-modal');
   const title = document.getElementById('rp-detail-title');
   const content = document.getElementById('rp-detail-content');
+  const viewModal = document.getElementById('invoice-view-modal');
+  const viewBody = document.getElementById('invoice-view-modal-body');
+  const createModal = document.getElementById('invoice-create-modal');
   let lastRow = null;
-  new MutationObserver(() => {
-    if (!details.classList.contains('is-open') && lastRow?.isConnected) {
-      lastRow.focus();
-      lastRow = null;
+  const focusBeforeOpen = new WeakMap();
+  for (const overlay of [details, createModal, viewModal]) {
+    if (!overlay) continue;
+    let wasOpen = overlay.classList.contains('is-open');
+    overlay.setAttribute('aria-hidden', wasOpen ? 'false' : 'true');
+    new MutationObserver(() => {
+      const isOpen = overlay.classList.contains('is-open');
+      if (isOpen === wasOpen) return;
+      wasOpen = isOpen;
+      overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      if (isOpen) {
+        focusBeforeOpen.set(overlay, document.activeElement);
+        overlay.querySelector('.modal-close')?.focus();
+      } else {
+        const previous = focusBeforeOpen.get(overlay);
+        const target = overlay === details ? lastRow : previous?.isConnected && previous !== document.body && previous.getClientRects().length ? previous : lastRow;
+        if (target?.isConnected && target.getClientRects().length) target.focus();
+        if (overlay === details && !createModal?.classList.contains('is-open') && !viewModal?.classList.contains('is-open')) lastRow = null;
+      }
+    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+    overlay.addEventListener('keydown', event => {
+      if (event.key !== 'Tab' || !overlay.classList.contains('is-open')) return;
+      const focusable = [...overlay.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href]')]
+        .filter(node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+      if (!focusable.length) return;
+      if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+      else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+    });
+  }
+  const createForm = createModal?.querySelector('form.invoice-form');
+  if (createForm) {
+    createForm.classList.add('registry-ui-modal-form');
+    const formBody = createForm.querySelector('.modal-body');
+    formBody?.classList.add('rp-lab-invoice-form-body');
+    formBody?.querySelectorAll('.section-title').forEach(heading => heading.classList.add('page-eyebrow'));
+    let field = 0;
+    for (const label of createForm.querySelectorAll('.field > .field-label')) {
+      const control = label.nextElementSibling;
+      if (!control?.matches('input,select,textarea')) continue;
+      const id = `rp-invoice-field-${++field}`;
+      control.id = id;
+      label.htmlFor = id;
     }
-  }).observe(details, { attributes: true, attributeFilter: ['class'] });
+    const foot = createForm.querySelector('.modal-foot');
+    if (foot) {
+      const actions = document.createElement('div');
+      actions.className = 'modal-foot-actions';
+      actions.append(...foot.querySelectorAll('button'));
+      foot.replaceChildren(actions);
+      foot.classList.remove('is-spaced');
+    }
+  }
+  function transformInvoiceView() {
+    const original = viewBody?.querySelector('.driver-modal-body');
+    if (!original) return;
+    const heading = original.querySelector('.driver-view-name');
+    if (heading) viewModal.querySelector('.modal-title').textContent = heading.textContent.trim();
+    const root = document.createElement('div');
+    root.className = 'registry-ui-modal-grid';
+    const section = label => {
+      const node = document.createElement('section');
+      node.className = 'registry-ui-modal-grid';
+      const eyebrow = document.createElement('span');
+      eyebrow.className = 'page-eyebrow';
+      eyebrow.textContent = label;
+      node.append(eyebrow);
+      return node;
+    };
+    const facts = section('Данные счёта');
+    facts.classList.add('registry-ui-modal-grid--reading', 'rp-lab-facts');
+    for (const row of original.querySelectorAll('.driver-view-row')) {
+      const metric = document.createElement('div');
+      metric.className = 'rp-lab-metric';
+      const label = document.createElement('span');
+      label.className = 'registry-ui-modal-secondary';
+      label.textContent = row.querySelector('.driver-view-cell-label')?.textContent.trim() || '';
+      const value = row.querySelector('.driver-view-cell-value');
+      if (value) { value.className = 'registry-ui-modal-text'; metric.append(label, value); }
+      facts.append(metric);
+    }
+    root.append(facts);
+    for (const headingNode of [...original.querySelectorAll('.section-title')]) {
+      const group = section(headingNode.querySelector('span')?.textContent.trim() || headingNode.textContent.trim());
+      const button = headingNode.querySelector('button');
+      if (button) {
+        const header = document.createElement('div');
+        header.className = 'rp-lab-section-head';
+        header.append(group.firstElementChild, button);
+        group.prepend(header);
+      }
+      let next = headingNode.nextElementSibling;
+      while (next && !next.classList.contains('section-title')) {
+        const following = next.nextElementSibling;
+        group.append(next);
+        next = following;
+      }
+      root.append(group);
+    }
+    const incomingFoot = viewBody.querySelector(':scope > .modal-foot');
+    viewModal.querySelector(':scope > .modal')?.querySelector(':scope > .modal-foot')?.remove();
+    if (incomingFoot) {
+      incomingFoot.querySelectorAll('[data-invoice-edit-btn],[data-invoice-cancel-btn]').forEach(button => button.remove());
+      incomingFoot.classList.remove('is-spaced');
+      const actions = document.createElement('div');
+      actions.className = 'modal-foot-actions';
+      actions.append(...incomingFoot.querySelectorAll('button'));
+      incomingFoot.replaceChildren(actions);
+      viewModal.querySelector(':scope > .modal')?.append(incomingFoot);
+    }
+    const style = viewBody.querySelector(':scope > style');
+    viewBody.replaceChildren(...(style ? [style] : []), root);
+  }
+  function setHtmlAndRunScripts(target, html) {
+    target.innerHTML = html;
+    target.querySelectorAll('script').forEach(source => {
+      const script = document.createElement('script');
+      for (const attribute of source.attributes) script.setAttribute(attribute.name, attribute.value);
+      script.textContent = source.textContent;
+      source.replaceWith(script);
+    });
+  }
   function openDetails(row) {
     if (!row) return;
     const template = document.getElementById('rp-detail-' + row.dataset.id);
@@ -115,7 +233,6 @@
       party.dispatchEvent(new Event('change', { bubbles: true }));
       window.closeModal('rp-detail-modal');
       window.openModal('invoice-create-modal');
-      lastRow = null;
     }
     const invoice = event.target.closest('[data-view-invoice]');
     if (invoice) {
@@ -125,7 +242,10 @@
       window.openModal('invoice-view-modal');
       fetch(details.dataset.invoiceBase + encodeURIComponent(invoice.dataset.viewInvoice) + '/modal-view')
         .then(response => { if (!response.ok) throw new Error('Счёт недоступен'); return response.text(); })
-        .then(html => { body.innerHTML = html; })
+        .then(html => {
+          setHtmlAndRunScripts(body, html);
+          transformInvoiceView();
+        })
         .catch(error => { body.textContent = error.message; });
     }
   });
