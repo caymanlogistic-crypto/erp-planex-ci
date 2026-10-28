@@ -12,6 +12,17 @@
   const content=dialog.querySelector('[data-driver-ts-detail]');
   const archive=dialog.querySelector('[data-driver-ts-archive]');
   let pending=null;
+  let filePage=0;
+  function updateFilePage(){
+    const pager=content.querySelector('[data-driver-ts-file-pages]');
+    if(!pager)return;
+    const fileRows=[...content.querySelectorAll('[data-driver-ts-file-row]')];
+    const total=Math.ceil(fileRows.length/3);
+    fileRows.forEach((fileRow,index)=>{fileRow.hidden=Math.floor(index/3)!==filePage;});
+    pager.querySelector('[data-driver-ts-page-label]').textContent=`${filePage+1} / ${total}`;
+    pager.querySelector('[data-driver-ts-page-prev]').disabled=filePage===0;
+    pager.querySelector('[data-driver-ts-page-next]').disabled=filePage===total-1;
+  }
   const update=()=>{
     const query=search.value.trim().toLocaleLowerCase('ru');
     const ordered=[...rows].sort((a,b)=>sort.value==='alpha'
@@ -37,6 +48,8 @@
       const response=await fetch(`${location.pathname}/${encodeURIComponent(id)}/detail`,{credentials:'same-origin',signal:pending.signal});
       if(!response.ok)throw new Error('detail');
       content.innerHTML=await response.text();
+      filePage=0;
+      updateFilePage();
     }catch(error){if(error.name!=='AbortError')content.textContent='Не удалось загрузить данные водителя и ТС.';}
   }
   tbody.addEventListener('dblclick',event=>{const row=event.target.closest('[data-driver-ts-id]');if(row)open(row);});
@@ -45,13 +58,10 @@
   dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
   dialog.addEventListener('close',()=>{if(pending)pending.abort();pending=null;content.textContent='';});
   content.addEventListener('click',event=>{
-    const link=event.target.closest('a[data-driver-ts-preview]');
-    if(!link)return;
-    event.preventDefault();
-    let preview=content.querySelector('.driver-ts-preview');
-    if(!preview){preview=document.createElement('div');preview.className='driver-ts-preview';content.querySelector('.registry-ui-modal-preview').append(preview);}
-    const frame=document.createElement('iframe');frame.title='Просмотр файла';frame.src=link.href;
-    preview.replaceChildren(frame);
+    const button=event.target.closest('[data-driver-ts-page-prev],[data-driver-ts-page-next]');
+    if(!button||button.disabled)return;
+    filePage+=button.hasAttribute('data-driver-ts-page-next')?1:-1;
+    updateFilePage();
   });
   update();
 })();

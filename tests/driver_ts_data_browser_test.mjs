@@ -26,6 +26,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
 try{
   for(const [width,height] of [[390,844],[1280,900],[1920,1080],[3840,2160]]){
+    if(process.env.PLANEX_ONLY_WIDTH&&Number(process.env.PLANEX_ONLY_WIDTH)!==width)continue;
     const page=await browser.newPage({viewport:{width,height}});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/company/driver-ts-data`);
@@ -48,7 +49,28 @@ try{
     await page.locator('.driver-ts-files-table').waitFor();
     assert.equal(await page.locator('[data-driver-ts-dialog]').evaluate(el=>el.open),true);
     assert.equal(await page.locator('[data-driver-ts-archive]').getAttribute('href'),'/company/driver-ts-data/9/archive');
-    assert.equal(await page.locator('.driver-ts-fields').count(),2);
+    assert.equal(await page.locator('.driver-ts-fields').count(),3);
+    assert.equal(await page.locator('.driver-ts-files-table tbody tr:visible').count(),3);
+    assert.equal(await page.locator('[data-driver-ts-page-label]').textContent(),'1 / 3');
+    assert.equal(await page.locator('.driver-ts-summary').getByText('Категория ВУ').count(),0);
+    assert.equal(await page.locator('.driver-ts-files-table a').first().getAttribute('target'),'_blank');
+    await page.locator('[data-driver-ts-page-next]').click();
+    assert.equal(await page.locator('[data-driver-ts-page-label]').textContent(),'2 / 3');
+    assert.equal(await page.locator('.driver-ts-files-table tbody tr:visible').count(),3);
+    await page.locator('[data-driver-ts-page-next]').click();
+    assert.equal(await page.locator('[data-driver-ts-page-label]').textContent(),'3 / 3');
+    assert.equal(await page.locator('.driver-ts-files-table tbody tr:visible').count(),1);
+    await page.locator('[data-driver-ts-page-prev]').click();
+    await page.locator('[data-driver-ts-page-prev]').click();
+    const modalBounds=await page.locator('[data-driver-ts-dialog]').evaluate(el=>{
+      const body=el.querySelector('.modal-body'),files=el.querySelector('.registry-ui-compact-table-scroll'),footer=el.querySelector('.modal-foot');
+      return {dialogScroll:el.scrollHeight-el.clientHeight,bodyScroll:body.scrollHeight-body.clientHeight,
+        filesScroll:files.scrollHeight-files.clientHeight,footerBottom:footer.getBoundingClientRect().bottom,
+        viewport:innerHeight};
+    });
+    if(width>700)assert.ok(modalBounds.dialogScroll<=1&&modalBounds.bodyScroll<=1&&modalBounds.filesScroll<=1&&modalBounds.footerBottom<=modalBounds.viewport,
+      `${width} popup must fit without scrolling: ${JSON.stringify(modalBounds)}`);
+    assert.equal(await page.locator('.driver-ts-summary-group').count(),3);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${width} modal overflow`);
     if(process.env.PLANEX_VISUAL_EVIDENCE_DIR){fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,`driver-ts-modal-${width}.png`)});}
     await page.keyboard.press('Escape');

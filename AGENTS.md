@@ -2,6 +2,10 @@
 
 Latest OWNER decisions define policy. Canonical executable GitHub defines implementation truth. Historical reports are evidence, never current instructions.
 
+## OWNER global rule — mobile visuals — 2026-10-28
+
+Do not adapt images, screenshots, visual layouts or interface composition for phones unless the OWNER gives a separate explicit instruction for that scope. Desktop-scoped changes do not authorize mobile-only controls, image resizing, responsive redesign or proposals for phone layouts. Preserve existing phone behavior and run required narrow-screen checks only to catch regressions. This rule overrides generic mobile/responsive adaptation wording below.
+
 ## Minimal bootstrap
 
 For one new ERP task:
