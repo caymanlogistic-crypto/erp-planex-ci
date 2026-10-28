@@ -179,6 +179,15 @@
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {
+      "id": "registry.paid-status",
+      "family": "registry",
+      "role": "Подпись состояния оплаты под суммой перевозчика",
+      "selector": ".registry-ui-paid-status",
+      "approval": "OWNER 2026-10-28; docs/ui/decisions-20261028-finance-received-paid.json; Design Lab carrier-paid-status-lab-20261028-c:v003",
+      "description": "Серое «ожидает оплаты» при полном комплекте и красное «оплата заблок.» при неполном, пока ставка оплачена не полностью; после полной оплаты подпись отсутствует.",
+      "specimen": "docs/ui/specimens/registry.paid-status.html"
+    },
+    {
       "id": "registry.status",
       "family": "registry",
       "role": "Предметные статусы",
@@ -240,6 +249,15 @@
       "approval": "OWNER 2026-10-24: reduce empty space in transfer history; docs/ui/decisions-20261024-feo-transfer-popups.json",
       "description": "Общий opt-in вариант оболочки для подробного просмотра: максимум 900 px. Двухгрупповая desktop-сетка и одноколоночная mobile-сетка используют общую роль registry-ui-modal-grid--reading; таблица занимает всю ширину, полный текст сохраняется.",
       "specimen": "docs/ui/specimens/registry.transfer-popup.html"
+    },
+    {
+      "id": "registry.modal-finance",
+      "family": "registry",
+      "role": "Композиция трёх попапов реестра Получено/оплачено",
+      "selector": ".registry-ui-modal--finance",
+      "approval": "OWNER 2026-10-28; docs/ui/decisions-20261028-finance-received-paid.json; Design Lab carrier-paid-status-lab-20261028-c:v003",
+      "description": "Общая opt-in сетка для просмотра рейса, формы создания счёта и просмотра счёта. Наследует согласованную оболочку, компактные текстовые роли и мобильную одноколоночную сетку. В блоке перевозчика перечисляются причины блокировки оплаты.",
+      "specimen": "docs/ui/specimens/registry.finance-popup.html"
     },
     {
       "id": "registry.modal-confirmation",

@@ -51,6 +51,14 @@ $trips = array_reverse([
     $trip(104, $side(100, [$payment(100)]), $side(null), ['date' => $future, 'due_date' => null, 'remaining' => true, 'status' => 'waiting_event']),
     $trip(105, $side(0), $side(80, [$payment(80)])),
 ]);
+foreach ($trips as &$row) {
+    $row['closing_payment'] = match ((int)$row['business_id']) {
+        102 => ['status' => 'incomplete', 'missing' => ['АКТ/УПД'], 'processed' => 1, 'total' => 2, 'tn_issues' => ['Заявка №502: нет скана ТН']],
+        104 => ['status' => 'incomplete', 'missing' => ['Подписанный договор / заявка'], 'processed' => 0, 'total' => 0, 'tn_issues' => []],
+        default => ['status' => 'ready', 'missing' => [], 'processed' => 1, 'total' => 1, 'tn_issues' => []],
+    };
+}
+unset($row);
 $localPdo = null;
 $dbError = null;
 $_SESSION = [];

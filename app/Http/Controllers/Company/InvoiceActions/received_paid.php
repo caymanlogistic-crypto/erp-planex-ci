@@ -4,6 +4,7 @@ use App\Core\Database;
 use App\Service\FinanceInvoiceService;
 use App\Service\FinanceObligationService;
 use App\Service\FinanceReceivedPaidService;
+use App\Service\WasteTripClosingService;
 
 $pageTitle = 'Получено/оплачено';
 $pageContext = 'Финансы › Получено/оплачено';
@@ -24,6 +25,14 @@ try {
         throw new RuntimeException('Финансовые данные пока недоступны.');
     }
     $trips = FinanceReceivedPaidService::fetch($localPdo);
+    $readiness = WasteTripClosingService::paymentReadinessForTrips(
+        $localPdo,
+        array_column($trips, 'id')
+    );
+    foreach ($trips as &$trip) {
+        $trip['closing_payment'] = $readiness[(int)$trip['id']] ?? null;
+    }
+    unset($trip);
 } catch (Throwable $exception) {
     $dbError = 'Ошибка загрузки данных: ' . $exception->getMessage();
     $localPdo = null;
