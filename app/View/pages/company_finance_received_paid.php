@@ -47,6 +47,9 @@ $renderSide = static function (array $trip, string $side) use ($stats, $money, $
     $dueState = $planDate === '' ? '' : (!$confirmed ? 'Ожидается событие' : ($remaining !== null && $remaining <= 0 ? 'Исполнено' : ($planDate < $todayMoscow ? $overdueText($planDate, $todayMoscow) : ($planDate === $todayMoscow ? 'Сегодня' : 'Впереди'))));
     $closing = !$customer && is_array($trip['closing_payment'] ?? null) ? $trip['closing_payment'] : null;
     $paymentStatus = $closing && ($remaining === null || $remaining > 0) ? (string)($closing['status'] ?? '') : '';
+    $closingUrl = !$customer && (int)($trip['id'] ?? 0) > 0
+        ? app_url('/company/logistics/closing-documents?trip_id=' . (int)$trip['id'])
+        : '';
     $tnIssueGroups = [];
     if ($paymentStatus === 'incomplete') {
         foreach ($closing['tn_issues'] ?? [] as $issue) {
@@ -69,14 +72,14 @@ $renderSide = static function (array $trip, string $side) use ($stats, $money, $
         </div>
         <div class="rp-lab-metric"><span class="registry-ui-modal-secondary"><?= $customer ? 'Срок поступления от заказчика' : 'Срок оплаты подрядчику' ?></span><span class="registry-ui-modal-text"><?= e($date($planDate)) ?><?= $dueState !== '' ? ' · ' . e($dueState) : '' ?></span></div>
         <?php if ($paymentStatus === 'incomplete'): ?>
-        <div class="registry-ui-modal-grid"><span class="page-eyebrow">Что блокирует оплату</span><span class="registry-ui-status registry-ui-error">оплата заблок.</span>
+        <div class="registry-ui-modal-grid"><span class="page-eyebrow">Что блокирует оплату</span><span><a class="badge badge-danger rp-payment-status-link" href="<?= e($closingUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Оплата заблокирована. Открыть закрывающие документы рейса №<?= (int)$trip['business_id'] ?> в новой вкладке">оплата заблок.</a></span>
             <?php if (!empty($closing['missing'])): ?><div class="rp-lab-metric"><span class="registry-ui-modal-secondary">Нет документов</span><span class="registry-ui-modal-text"><?= e(implode(', ', $closing['missing'])) ?></span></div><?php endif; ?>
             <?php if ((int)$closing['total'] === 0): ?><div class="rp-lab-metric"><span class="registry-ui-modal-secondary">ТН</span><span class="registry-ui-modal-text">Заявки по рейсу не указаны</span></div>
             <?php elseif ((int)$closing['processed'] < (int)$closing['total']): ?><div class="rp-lab-metric"><span class="registry-ui-modal-secondary">ТН</span><span class="registry-ui-modal-text">Обработано <?= (int)$closing['processed'] ?> из <?= (int)$closing['total'] ?> заявок</span></div><?php endif; ?>
             <?php foreach ($tnIssueGroups as $reason => $count): ?><div class="rp-lab-metric"><span class="registry-ui-modal-secondary">Ошибка ТН</span><span class="registry-ui-modal-text"><?= e($reason) ?><?= $count > 0 ? ' · заявок: ' . (int)$count : '' ?></span></div><?php endforeach; ?>
         </div>
         <?php elseif ($paymentStatus === 'ready'): ?>
-        <div class="registry-ui-modal-grid"><span class="page-eyebrow">Состояние оплаты</span><span class="registry-ui-secondary">ожидает оплаты</span><span class="registry-ui-modal-secondary">Обязательные документы собраны; заявки и ТН обработаны.</span></div>
+        <div class="registry-ui-modal-grid"><span class="page-eyebrow">Состояние оплаты</span><span><a class="badge rp-payment-status-link" href="<?= e($closingUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Ожидает оплаты. Открыть закрывающие документы рейса №<?= (int)$trip['business_id'] ?> в новой вкладке">ожидает оплаты</a></span><span class="registry-ui-modal-secondary">Обязательные документы собраны; заявки и ТН обработаны.</span></div>
         <?php endif; ?>
         <div class="registry-ui-modal-grid"><span class="page-eyebrow"><?= $customer ? 'Счета заказчику' : 'Счета перевозчика' ?></span>
             <?php if (!$block['invoices']): ?><span class="registry-ui-modal-secondary">Нет счёта</span><?php endif; ?>

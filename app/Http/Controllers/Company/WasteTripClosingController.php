@@ -44,7 +44,8 @@ final class WasteTripClosingController
             }
             $schemaReady=WasteTripClosingService::ready($pdo);
             if ($schemaReady) {
-                $trips=WasteTripClosingService::trips($pdo);
+                $selectedTripId=filter_var($_GET['trip_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]) ?: null;
+                $trips=WasteTripClosingService::trips($pdo,$selectedTripId);
                 $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
                 foreach ($trips as &$trip) $trip['transport']=$transport[(int)$trip['id']]??null;
                 unset($trip);

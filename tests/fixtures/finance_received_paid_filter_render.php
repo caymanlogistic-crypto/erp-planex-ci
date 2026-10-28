@@ -24,6 +24,7 @@ $side = static fn(?int $rate, array $payments = [], array $invoices = []): array
     'invoices' => $invoices,
 ];
 $trip = static fn(int $id, array $customer, array $carrier, ?array $planned = null, ?array $carrierPlan = null): array => [
+    'id' => $id + 1000,
     'business_id' => $id,
     'comment' => 'Рейс ' . $id,
     'actual_start_date' => '2026-09-28',
