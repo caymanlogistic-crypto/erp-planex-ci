@@ -162,8 +162,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "f42a0a00656438d9c479aa1a8cda6e4a03011cae",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/commit/f42a0a00656438d9c479aa1a8cda6e4a03011cae",
+      "verified_sha": "d945f40f2fc7327542573f6e2617665301dabbef",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/commit/d945f40f2fc7327542573f6e2617665301dabbef",
       "verification_note": "2026-10-28: OWNER phone-visual rule updates AGENTS.md; CI workflows, path classification and gates are unchanged. Parallel canonical PR #485 added a deterministic finance Design Lab preset and renderer with synthetic-only preview; its Design Lab contract, UI canon/catalog, browser and exact accepted-page parity checks passed. This task's driver/TS browser/runtime and ui_standard catalog checks passed before publication.",
       "owning_paths": [
         ".github/workflows/ci.yml",
