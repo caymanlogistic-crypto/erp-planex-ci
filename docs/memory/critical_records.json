@@ -44,9 +44,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2e1488529e20f8dfdf9cd8318f413e2ff50dc7bc",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2e1488529e20f8dfdf9cd8318f413e2ff50dc7bc/tests/roles_access_route_registry_test.py",
-      "verification_note": "2026-10-29: TN review gained a read-only detail endpoint under its existing role gate; registrar detail uses its existing collection gate. Route registry and roles access core tests passed; grants were not changed.",
+      "verified_sha": "96b64d8567ef90c43693300a70fbefd51b4d67ea",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/96b64d8567ef90c43693300a70fbefd51b4d67ea/tests/roles_access_endpoint_integration_test.php",
+      "verification_note": "2026-10-29: TN review gained a read-only detail endpoint under its existing role gate; registrar detail uses its existing collection gate. Route registry, endpoint inventory and roles access core tests passed; grants were not changed.",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -323,8 +323,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2e1488529e20f8dfdf9cd8318f413e2ff50dc7bc",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2e1488529e20f8dfdf9cd8318f413e2ff50dc7bc/tests/employee_mail_browser_test.mjs",
+      "verified_sha": "96b64d8567ef90c43693300a70fbefd51b4d67ea",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/96b64d8567ef90c43693300a70fbefd51b4d67ea/tests/employee_mail_browser_test.mjs",
       "verification_note": "2026-10-29: shared route registry changed for lazy TN review details; employee mail implementation was unchanged. Mail contract and browser 1366/390 px passed.",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
