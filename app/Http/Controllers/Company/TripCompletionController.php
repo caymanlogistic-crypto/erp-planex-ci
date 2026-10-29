@@ -25,6 +25,7 @@ final class TripCompletionController
     public function __construct(private readonly array $config,private readonly Database $db) {}
 
     public function tnReview(): void { $this->reviewerMode=true; $this->index(); }
+    public function tnReviewBody(string $tripId): void { $this->reviewerMode=true; $this->tripBody($tripId); }
     public function tnReviewPreview(string $tripId): void { $this->reviewerMode=true; $this->reviewPreview($tripId); }
     public function tnReviewAction(string $tripId): void { $this->reviewerMode=true; $this->reviewAction($tripId); }
     public function tnReviewSave(string $tripId,string $requestId): void { $this->reviewerMode=true; $this->save($tripId,$requestId); }
@@ -53,9 +54,12 @@ final class TripCompletionController
                 'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$work)),
             ];
             $trips=$all;
-            foreach ($trips as $index=>$trip) {
-                $details=$service->trip((int)$trip['id']);
-                $trips[$index]=array_merge($trip,$details);
+            if ($this->reviewerMode) {
+                $requestsByTrip=$service->tripListRequests(array_map('intval',array_column($all,'id')));
+                foreach ($trips as &$trip) $trip['requests']=$requestsByTrip[(int)$trip['id']]??[];
+                unset($trip);
+            } else {
+                foreach ($trips as $index=>$trip) $trips[$index]=array_merge($trip,$service->trip((int)$trip['id']));
             }
             $order=['work'=>0,'review'=>1,'archive'=>2];
             usort($trips,fn(array $a,array $b):int=>$this->reviewerMode
@@ -67,8 +71,28 @@ final class TripCompletionController
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }
         $pageTitle=$this->reviewerMode?'Проверка ТН':'Регистрация прибытия и убытия';$pageContext='Рейсы › '.($this->reviewerMode?'Проверка ТН':'Регистрация времени загрузки');
         $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>$this->reviewerMode?'Проверка ТН':'Регистрация времени загрузки','url'=>null]];
-        $config=$this->config;$db=$this->db;$reviewerMode=$this->reviewerMode;
+        $config=$this->config;$db=$this->db;$reviewerMode=$this->reviewerMode;$deferTripBodies=$reviewerMode;
         ob_start();require base_path('app/View/pages/company_logistics_assistant.php');$content=(string)ob_get_clean();require base_path('app/View/layouts/main.php');
+    }
+
+    public function tripBody(string $tripId): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            [, $service]=$this->context();$this->assertReady($service);
+            $trip=$this->visibleTrip($service,(int)$tripId);
+            $reviewerMode=$this->reviewerMode;
+            $basePath=$reviewerMode?'/company/tn-review':'/company/logistics-assistant';
+            $tripStatus=(string)$trip['review_status'];
+            require base_path('app/View/pages/company_logistics_helpers.php');
+            header('Content-Type: text/html; charset=utf-8');
+            require base_path('app/View/pages/company_logistics_trip_body.php');
+        } catch (Throwable $exception) {
+            error_log('trip completion body failed: '.$exception->getMessage());
+            http_response_code($exception instanceof DomainException?404:500);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Не удалось загрузить заявки рейса.';
+        }
     }
 
     public function journal(): void

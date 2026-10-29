@@ -82,6 +82,50 @@ final class TripCompletionService
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /** Lightweight request data for list summaries and client-side search; full forms load on demand. */
+    public function tripListRequests(array $tripIds): array
+    {
+        if ($tripIds===[]) return [];
+        $marks=implode(',',array_fill(0,count($tripIds),'?'));
+        $stmt=$this->tenant->prepare("SELECT wtr.id,wtr.waste_trip_id,wtr.snapshot_mass_kg,fr.zayavka_id,
+                fr.naim_oo_gruzootpravitel shipper_name,fr.mno_adres_pogruzki pickup_address,
+                fr.gruzopoluchatel consignee_name,COALESCE(NULLIF(fr.adres_dostavki_otkhodov,''),fr.adres_vygruzki_otkhodov) delivery_address,
+                i.arrived_at,i.departed_at,i.driver_signature_status,i.sender_signature_status,
+                i.tn_datetime_status,i.recovery_source,COALESCE(i.tn_absent,0) tn_absent,
+                COALESCE(i.driver_signature_present,0) driver_signature_present,
+                COALESCE(i.sender_signature_present,0) sender_signature_present,
+                COALESCE(i.tn_datetime_missing,0) tn_datetime_missing,
+                COALESCE(i.data_from_tracker,0) data_from_tracker,
+                COALESCE(i.data_from_driver,0) data_from_driver,
+                COALESCE(i.data_invented,0) data_invented,COALESCE(i.comment,'') completion_comment
+            FROM waste_trip_requests wtr
+            JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+            WHERE wtr.waste_trip_id IN ($marks) AND wtr.removed_at IS NULL
+            ORDER BY CAST(fr.zayavka_id AS UNSIGNED) DESC,fr.zayavka_id DESC,wtr.id DESC");
+        $stmt->execute($tripIds);
+        $rows=$stmt->fetchAll(PDO::FETCH_ASSOC);
+        $requestIds=array_map('intval',array_column($rows,'id'));
+        $documents=[];
+        if ($requestIds!==[]) {
+            $docMarks=implode(',',array_fill(0,count($requestIds),'?'));
+            $docs=$this->tenant->prepare("SELECT waste_trip_request_id,download_name FROM waste_trip_completion_documents WHERE deleted_at IS NULL AND waste_trip_request_id IN ($docMarks)");
+            $docs->execute($requestIds);
+            foreach ($docs->fetchAll(PDO::FETCH_ASSOC) as $doc) $documents[(int)$doc['waste_trip_request_id']][]=(string)$doc['download_name'];
+        }
+        $byTrip=[];
+        foreach ($rows as $row) {
+            $row['driver_signature_status']=$row['driver_signature_status']?:((int)$row['driver_signature_present']===1?'yes':null);
+            $row['sender_signature_status']=$row['sender_signature_status']?:((int)$row['sender_signature_present']===1?'yes':null);
+            $row['tn_datetime_status']=$row['tn_datetime_status']?:((int)$row['tn_datetime_missing']===1?'no':(!empty($row['arrived_at'])&&!empty($row['departed_at'])?'full':null));
+            $row['recovery_source']=$row['recovery_source']==='invented'?'driver':($row['recovery_source']?:((int)$row['data_from_tracker']===1?'tracker':(((int)$row['data_from_driver']===1||(int)$row['data_invented']===1)?'driver':null)));
+            $row['document_names']=$documents[(int)$row['id']]??[];
+            $row['document_count']=count($row['document_names']);
+            $byTrip[(int)$row['waste_trip_id']][]=$row;
+        }
+        return $byTrip;
+    }
+
     /** @return array<string,mixed> */
     public function trip(int $tripId): array
     {

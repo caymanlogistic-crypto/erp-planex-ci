@@ -128,26 +128,30 @@
   };
 
   const updateTripSummary = (trip) => {
-    const rows = [...trip.querySelectorAll('[data-request-row]')];
+    const domRows = [...trip.querySelectorAll('[data-request-row]')];
+    const rows = domRows.length ? domRows.map((row) => ({
+      id: (row.querySelector('.logistics-request-route b')?.textContent.trim() || row.dataset.requestId).replace(/^№\s*/, ''),
+      scans: row.querySelectorAll('.lab-docs-item').length,
+      tnAbsent: !!row.querySelector('.lab-docs-no-tn:checked'),
+      time: row.querySelector('.logistics-time input')?.value || '',
+      date: row.querySelector('.lab-choice--date input:checked')?.value || '',
+      recovery: row.querySelector('.lab-choice--recovery input:checked')?.value || '',
+      oo: row.querySelector('.lab-choice--oo input:checked')?.value || '',
+      driver: row.querySelector('.lab-choice--driver input:checked')?.value || '',
+      comment: row.querySelector('.logistics-comment textarea')?.value.trim() || '',
+    })) : JSON.parse(trip.dataset.summary || '[]');
     const partial = [], unfilled = [], noTn = [], tracker = [], driverSource = [];
     let ready = 0, timeEntered = 0;
     rows.forEach((row) => {
-      const id = (row.querySelector('.logistics-request-route b')?.textContent.trim() || row.dataset.requestId).replace(/^№\s*/, '');
-      const scans = row.querySelectorAll('.lab-docs-item').length;
-      const tnAbsent = !!row.querySelector('.lab-docs-no-tn:checked');
-      const interval = row.querySelector('.logistics-time')?.dataset.intervalState;
-      const date = row.querySelector('.lab-choice--date input:checked')?.value;
-      const recovery = row.querySelector('.lab-choice--recovery input:checked')?.value;
-      const oo = row.querySelector('.lab-choice--oo input:checked')?.value;
-      const driver = row.querySelector('.lab-choice--driver input:checked')?.value;
-      const comment = row.querySelector('.logistics-comment textarea')?.value.trim();
+      const {id, scans, tnAbsent, date, recovery, oo, driver, comment} = row;
+      const interval = intervalState(row.time);
       if (recovery === 'tracker') tracker.push(id);
       if (recovery === 'driver') driverSource.push(id);
       if (tnAbsent) noTn.push(id);
       const complete = scans && !tnAbsent && interval === 'valid' && (date === 'full' || ((date === 'partial' || date === 'no') && recovery)) && oo === 'yes' && driver === 'yes';
       if (interval === 'valid' && !tnAbsent) timeEntered++;
       if (complete) ready++;
-      else if (row.querySelector('.logistics-time input')?.value.trim() || date || recovery || oo || driver || scans || comment || tnAbsent) partial.push(id);
+      else if (row.time.trim() || date || recovery || oo || driver || scans || comment || tnAbsent) partial.push(id);
       else unfilled.push(id);
     });
     const progress = trip.querySelector('.lab-trip-progress');
@@ -168,7 +172,7 @@
     const second = percent <= 50 ? 'var(--warning-border)' : 'var(--success)';
     fill.style.setProperty('--lab-progress-color', `color-mix(in srgb, ${first} ${Math.round((1 - share) * 100)}%, ${second})`);
     trip.dataset.ready = String(ready === rows.length);
-    const hasEnteredTime = rows.some((row) => /\b\d{1,2}:\d{1,2}\b/.test(row.querySelector('.logistics-time input')?.value || ''));
+    const hasEnteredTime = rows.some((row) => /\b\d{1,2}:\d{1,2}\b/.test(row.time));
     const renderBlock = (block, title, categories, visible = hasEnteredTime) => {
       block.replaceChildren(make('small', 'lab-trip-label', title));
       categories.filter(([, ids]) => ids.length).forEach(([label, ids, error]) => {
@@ -189,6 +193,7 @@
   };
 
   const applySearch = () => {
+    if (reviewerMode) return;
     const query = (search?.value || '').toLocaleLowerCase('ru').replace(/\s+/g, ' ').trim();
     let visible = 0;
     trips.forEach((trip) => {
@@ -212,7 +217,7 @@
     const values = document.querySelectorAll('.logistics-metrics .metric-value');
     if (values.length === 4) [trips.filter((trip) => trip.dataset.ready !== 'true').length, rows.length, ready, rows.length - ready].forEach((value, index) => { values[index].textContent = String(value); });
   };
-  const refresh = (trip) => {
+  const refresh = (trip, initial = false) => {
     trip.querySelectorAll('[data-request-row]').forEach((row) => {
       const hasScan = !!row.querySelector('.lab-docs-item');
       const validTime = row.querySelector('.logistics-time')?.dataset.intervalState === 'valid';
@@ -222,11 +227,10 @@
         && row.querySelector('.lab-choice--oo input[value="yes"]')?.checked && row.querySelector('.lab-choice--driver input[value="yes"]')?.checked);
     });
     updateTripSummary(trip);
-    updateMetrics();
-    applySearch();
+    if (!initial) { updateMetrics(); applySearch(); }
   };
 
-  root.querySelectorAll('[data-request-row]').forEach((row) => {
+  const bindRow = (row) => {
     const form = row.querySelector('[data-autosave-form]');
     const trip = row.closest('.logistics-trip');
     let timer = 0;
@@ -318,7 +322,8 @@
       } catch (error) { saveState(row, 'error', error.message); message.textContent = error.message; }
       finally { picker.value = ''; }
     });
-  });
+  };
+  root.querySelectorAll('[data-request-row]').forEach(bindRow);
 
   root.addEventListener('click', async (event) => {
     const view = event.target.closest('[data-preview-url]');
@@ -341,12 +346,32 @@
   });
 
   trips.forEach((trip) => {
-    refresh(trip);
+    refresh(trip, true);
+    const loadBody = async () => {
+      const body = trip.querySelector('[data-trip-body-url]');
+      if (!body || trip.dataset.bodyLoading === '1') return;
+      trip.dataset.bodyLoading = '1';
+      trip.setAttribute('aria-busy', 'true');
+      try {
+        const response = await fetch(body.dataset.tripBodyUrl, {credentials: 'same-origin'});
+        if (!response.ok) throw new Error('Не удалось загрузить заявки рейса.');
+        body.outerHTML = await response.text();
+        trip.querySelectorAll('[data-request-row]').forEach(bindRow);
+        trip.removeAttribute('data-summary');
+        trip.removeAttribute('data-search');
+        refresh(trip);
+        root.dispatchEvent(new CustomEvent('trip-body-loaded', {detail: {trip}}));
+      } catch (error) { body.textContent = error.message; }
+      finally { trip.dataset.bodyLoading = '0'; trip.removeAttribute('aria-busy'); }
+    };
     trip.addEventListener('toggle', () => {
-      if (!trip.open || search?.value.trim()) return;
-      trips.forEach((other) => { if (other !== trip) other.open = false; });
+      if (!trip.open) return;
+      if (!search?.value.trim()) trips.forEach((other) => { if (other !== trip) other.open = false; });
+      loadBody();
     });
+    if (trip.open) loadBody();
   });
+  updateMetrics();
   search?.addEventListener('input', applySearch);
   hideComplete?.addEventListener('change', applySearch);
   applySearch();

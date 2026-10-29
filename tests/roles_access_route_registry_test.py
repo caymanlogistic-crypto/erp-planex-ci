@@ -37,7 +37,7 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 439, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 441, f"company route inventory drift: {len(company_routes)}"
 for endpoint in ('/company/driver-ts-data','/company/driver-ts-data/{id}/detail','/company/driver-ts-data/{id}/files/{documentId}','/company/driver-ts-data/{id}/archive'):
     assert ('app/Http/Routes/company_driver_ts_data.php',endpoint) in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/warehouses/addresses") in company_routes
@@ -71,8 +71,8 @@ documents = (ROOT / 'app/Http/Routes/company_trip_documents.php').read_text(enco
 assert documents.count('$router->') == 16
 assert "'company.documents.request'" in documents and "'company.documents.collection'" in documents
 tn_review_routes = (ROOT / 'app/Http/Routes/company_trip_completion.php').read_text(encoding='utf-8')
-assert tn_review_routes.count('$tnReviewPage);') == 9, 'Every TN reviewer endpoint needs its own role gate'
-assert tn_review_routes.count('$tripCompletionPage);') == 10, 'Registration endpoints must retain their role gate'
+assert tn_review_routes.count('$tnReviewPage);') == 10, 'Every TN reviewer endpoint needs its own role gate'
+assert tn_review_routes.count('$tripCompletionPage);') == 11, 'Registration endpoints must retain their role gate'
 trip_routes = (ROOT / "app/Http/Routes/company_linear_trips.php").read_text(encoding="utf-8")
 assert "/company/trips/departures/synchronize" in trip_routes
 assert "/company/trips/departures/{id}/delete" in trip_routes

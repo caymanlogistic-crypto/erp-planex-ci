@@ -33,6 +33,8 @@ try{
     $ok(count($service->trips('',false))===3,'All eligible trips include a trip with no requests');
     $ok($rows[0]['status']==='in_progress'&&$rows[0]['actual_end_date']===null&&$rows[0]['manager_name']==='Тестовый логист','In-progress status, missing end date, and manager visible');
     $trip=$service->trip(1);$ok(array_column($trip['requests'],'zayavka_id')===['275006','274405'],'Requests ordered by descending number');$ok(count($trip['requests'][0]['issues'])===4,'Initial four problems');
+    $listRequests=$service->tripListRequests([1,2,3]);
+    $ok(array_column($listRequests[1],'zayavka_id')===['275006','274405']&&count($listRequests[2])===1&&!isset($listRequests[3]),'Lightweight list requests preserve order and empty trips');
     $pdo->exec("INSERT INTO waste_trip_completion_items(waste_trip_request_id,tn_datetime_status,recovery_source,data_invented) VALUES(13,'no','invented',1)");
     $legacy=$service->trip(2)['requests'][0];$ok($legacy['recovery_source']==='driver','Legacy invented source renders as driver before backfill');
     $pdo->exec((string)file_get_contents(BASE_PATH.'/database/migrations-local/146_remap_trip_completion_invented_source.sql'));
@@ -64,6 +66,8 @@ try{
     $tmp=tempnam(sys_get_temp_dir(),'tn_');file_put_contents($tmp,base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2Q=='));
     try{$fails(fn()=>$service->upload(1,12,['name'=>'third.jpg','tmp_name'=>$tmp,'error'=>UPLOAD_ERR_OK,'size'=>filesize($tmp)],101,false));}finally{@unlink($tmp);}
     $trip=$service->trip(1);$visible=$service->trips('',true);$ok((int)$trip['complete_count']===2&&count($visible)===1&&(int)$visible[0]['business_id']===245,'Complete trip hidden by default');
+    $listRequests=$service->tripListRequests([1]);
+    $ok($listRequests[1][0]['document_count']===2&&count($listRequests[1][0]['document_names'])===2&&$listRequests[1][0]['recovery_source']==='driver','Lightweight summaries include scans and normalized form states');
     $completeInput=['pickup_interval'=>'01.09.26 09:40 - 10:00','driver_signature_status'=>'yes','sender_signature_status'=>'yes','tn_datetime_status'=>'full'];
     $service->save(1,11,$completeInput+['tn_absent'=>'1'],101);
     $flagged=$service->trip(1);$flaggedRequest=array_values(array_filter($flagged['requests'],static fn(array $request):bool=>(int)$request['id']===11))[0];

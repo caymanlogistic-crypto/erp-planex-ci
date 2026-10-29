@@ -9,7 +9,7 @@ $statusMigration=$read('database/migrations-local/144_trip_completion_explicit_s
 $service=$read('app/Service/TripCompletionService.php');
 $controller=$read('app/Http/Controllers/Company/TripCompletionController.php');
 $routes=$read('app/Http/Routes/company_trip_completion.php');
-$view=$read('app/View/pages/company_logistics_assistant.php');
+$view=$read('app/View/pages/company_logistics_assistant.php').$read('app/View/pages/company_logistics_trip_body.php');
 $javascript=$read('public/assets/js/trip-completion.js');
 $styles=$read('public/assets/css/trip-completion.css');
 $registry=$read('app/Security/PageRegistry.php');
@@ -17,7 +17,7 @@ foreach(['waste_trip_completion_items','waste_trip_completion_documents','arrive
 foreach(['tn_datetime_missing','data_from_tracker','data_from_driver','data_invented']as$token)$ok(str_contains($extensionMigration,$token),'Migration 143 missing '.$token);
 foreach(['sender_signature_status','driver_signature_status','tn_datetime_status','recovery_source']as$token)$ok(str_contains($statusMigration,$token),'Migration 144 missing '.$token);
 foreach(['/company/logistics-assistant','/report','/package','/documents/{documentId}']as$token)$ok(str_contains($routes,$token),'Route missing '.$token);
-$ok(substr_count($routes,'$tripCompletionPage')===11&&str_contains($routes,'/package-stage'),
+$ok(substr_count($routes,'$tripCompletionPage')===12&&str_contains($routes,'/package-stage'),
     'Every registrar endpoint, including chunked package upload, must use the collection permission');
 $ok(str_contains($registry,"'company.documents.collection', 'Регистрация времени загрузки', 'Операции', '', 42")
     &&str_contains($registry,"badgeProvider: 'trip_completion_problem'")
@@ -27,7 +27,7 @@ $ok(str_contains($view,'lab-trip-status')&&str_contains($view,'lab-trip-manager'
 foreach(['Показать все рейсы','Показать все','В работе','На проверке','Архив','Проверено / архив','Передать на проверку','Вернуть на доработку','Переместить в архив','Вернуть из архива','Дата и время прибытия/убытия','ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ','Подпись ОО','Подпись водителя','Дата и время указаны','Данные восстановлены','Со слов вод./мен','+ Добавить скан','Просмотр','Скачать полный комплекс']as$label)$ok(str_contains($view,$label),'UI missing '.$label);
 $ok(str_contains($view,'data-review-filters')&&str_contains($view,'registry-ui-tabs')&&str_contains($view,'data-review-tab="all"')&&str_contains($view,'registry-ui-search')&&!str_contains($view,'Показать архив'),'Reviewer filters use the approved tabs and search toolbar');
 $ok(!str_contains($view,'lab-review-status'),'Repeated review badges must not appear in trip rows');
-$ok(str_contains($routes,"'company.documents.tn_review'")&&str_contains($registry,"'company.documents.tn_review', 'Проверка ТН'")&&substr_count($routes,'$tnReviewPage')===10,'Separate reviewer route and role permission missing');
+$ok(str_contains($routes,"'company.documents.tn_review'")&&str_contains($registry,"'company.documents.tn_review', 'Проверка ТН'")&&substr_count($routes,'$tnReviewPage')===11,'Separate reviewer route and role permission missing');
 $ok(!str_contains($view,'Вернуть в работу')&&str_contains($controller,"$".'this->reviewerMode'), 'Registrar and reviewer actions must be separated');
 $ok(!str_contains($view,'Подпись Отходообразователя')&&!str_contains($view,'Придуманы')&&!str_contains($view,'lab-trip-email'),'Removed labels must not appear in the page');
 $ok(str_contains($view,'lab-trip-restored')&&str_contains($view,'lab-docs-download'),'Summary and scan download controls missing');
