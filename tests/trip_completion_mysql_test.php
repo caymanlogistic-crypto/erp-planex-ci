@@ -67,7 +67,7 @@ try{
     try{$fails(fn()=>$service->upload(1,12,['name'=>'third.jpg','tmp_name'=>$tmp,'error'=>UPLOAD_ERR_OK,'size'=>filesize($tmp)],101,false));}finally{@unlink($tmp);}
     $trip=$service->trip(1);$visible=$service->trips('',true);$ok((int)$trip['complete_count']===2&&count($visible)===1&&(int)$visible[0]['business_id']===245,'Complete trip hidden by default');
     $listRequests=$service->tripListRequests([1]);
-    $ok($listRequests[1][0]['document_count']===2&&count($listRequests[1][0]['document_names'])===2&&$listRequests[1][0]['recovery_source']==='driver','Lightweight summaries include scans and normalized form states');
+    $ok($listRequests[1][0]['document_count']===2&&count($listRequests[1][0]['document_names'])===2&&$listRequests[1][0]['recovery_source']==='driver'&&$listRequests[1][0]['is_complete']===true,'Lightweight summaries include scans, normalized form states and readiness');
     $completeInput=['pickup_interval'=>'01.09.26 09:40 - 10:00','driver_signature_status'=>'yes','sender_signature_status'=>'yes','tn_datetime_status'=>'full'];
     $service->save(1,11,$completeInput+['tn_absent'=>'1'],101);
     $flagged=$service->trip(1);$flaggedRequest=array_values(array_filter($flagged['requests'],static fn(array $request):bool=>(int)$request['id']===11))[0];

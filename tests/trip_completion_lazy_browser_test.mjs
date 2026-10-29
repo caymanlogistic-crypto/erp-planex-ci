@@ -10,10 +10,13 @@ const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const fixture=(mode)=>execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),mode],{encoding:'utf8'});
 const list=fixture('reviewer-lazy'),body=fixture('reviewer-body');
-let bodyRequests=0;
+const registrationList=fixture('registration-lazy'),registrationBody=fixture('registration-body');
+let bodyRequests=0,registrationBodyRequests=0;
 const server=http.createServer((req,res)=>{
   if(req.url==='/reviewer'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(list);}
+  if(req.url==='/registration'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(registrationList);}
   if(/^\/company\/tn-review\/\d+\/body$/.test(req.url)){bodyRequests++;res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(body);}
+  if(/^\/company\/logistics-assistant\/\d+\/body$/.test(req.url)){registrationBodyRequests++;res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(registrationBody);}
   const file=path.resolve(root,'public','.'+req.url.split('?')[0]);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
   res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':'application/octet-stream');
@@ -40,6 +43,17 @@ try{
   await trip.locator('summary').click();
   await trip.locator('summary').click();
   assert.equal(bodyRequests,1,'Reopening does not refetch the body');
+  await page.goto('http://127.0.0.1:'+server.address().port+'/registration',{waitUntil:'networkidle'});
+  assert.equal(registrationBodyRequests,0,'Registration starts with summaries only');
+  assert.equal(await page.locator('[data-autosave-form]').count(),0,'Registration initial DOM has no forms');
+  assert.deepEqual(await page.locator('.logistics-metrics .metric-value').allTextContents(),['1','4','2','2'],'Registration metrics include unloaded requests');
+  await page.locator('.logistics-filter input[name="q"]').fill('275006');
+  const registrationTrip=page.locator('.logistics-trip[data-trip-id="1"]');
+  await registrationTrip.locator('[data-request-row]').first().waitFor();
+  assert.equal(registrationBodyRequests,1,'Request search loads only the matching trip');
+  assert.equal(await registrationTrip.locator('[data-request-row]:visible').count(),1,'Request search keeps only matching row visible');
+  assert.equal(await registrationTrip.locator('input[name="pickup_interval"]').first().isEnabled(),true,'Work trip remains editable');
+  assert.deepEqual(await page.locator('.logistics-metrics .metric-value').allTextContents(),['1','4','2','2'],'Metrics stay stable after loading a single trip');
   assert.deepEqual(errors,[]);
   console.log('TRIP_COMPLETION_LAZY_BROWSER=PASS');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

@@ -121,6 +121,7 @@ final class TripCompletionService
             $row['recovery_source']=$row['recovery_source']==='invented'?'driver':($row['recovery_source']?:((int)$row['data_from_tracker']===1?'tracker':(((int)$row['data_from_driver']===1||(int)$row['data_invented']===1)?'driver':null)));
             $row['document_names']=$documents[(int)$row['id']]??[];
             $row['document_count']=count($row['document_names']);
+            $row['is_complete']=$this->issues($row+['documents'=>$row['document_names']])===[];
             $byTrip[(int)$row['waste_trip_id']][]=$row;
         }
         return $byTrip;

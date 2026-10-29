@@ -54,13 +54,9 @@ final class TripCompletionController
                 'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$work)),
             ];
             $trips=$all;
-            if ($this->reviewerMode) {
-                $requestsByTrip=$service->tripListRequests(array_map('intval',array_column($all,'id')));
-                foreach ($trips as &$trip) $trip['requests']=$requestsByTrip[(int)$trip['id']]??[];
-                unset($trip);
-            } else {
-                foreach ($trips as $index=>$trip) $trips[$index]=array_merge($trip,$service->trip((int)$trip['id']));
-            }
+            $requestsByTrip=$service->tripListRequests(array_map('intval',array_column($all,'id')));
+            foreach ($trips as &$trip) $trip['requests']=$requestsByTrip[(int)$trip['id']]??[];
+            unset($trip);
             $order=['work'=>0,'review'=>1,'archive'=>2];
             usort($trips,fn(array $a,array $b):int=>$this->reviewerMode
                 ? ((int)$b['business_id']<=>(int)$a['business_id']) ?: ((int)$b['id']<=>(int)$a['id'])
@@ -71,7 +67,7 @@ final class TripCompletionController
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }
         $pageTitle=$this->reviewerMode?'Проверка ТН':'Регистрация прибытия и убытия';$pageContext='Рейсы › '.($this->reviewerMode?'Проверка ТН':'Регистрация времени загрузки');
         $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>$this->reviewerMode?'Проверка ТН':'Регистрация времени загрузки','url'=>null]];
-        $config=$this->config;$db=$this->db;$reviewerMode=$this->reviewerMode;$deferTripBodies=$reviewerMode;
+        $config=$this->config;$db=$this->db;$reviewerMode=$this->reviewerMode;$deferTripBodies=true;
         ob_start();require base_path('app/View/pages/company_logistics_assistant.php');$content=(string)ob_get_clean();require base_path('app/View/layouts/main.php');
     }
 
