@@ -200,7 +200,9 @@
       const summaryMatches = [...trip.querySelectorAll('.lab-trip-identity,.lab-trip-contact')]
         .map((element) => element.textContent).join(' ').toLocaleLowerCase('ru').includes(query);
       const rows = [...trip.querySelectorAll('[data-request-row]')];
-      const matches = rows.filter((row) => row.querySelector('.logistics-request-route')?.textContent.toLocaleLowerCase('ru').includes(query));
+      const matches = rows.length
+        ? rows.filter((row) => row.querySelector('.logistics-request-route')?.textContent.toLocaleLowerCase('ru').includes(query))
+        : JSON.parse(trip.dataset.summary || '[]').filter((row) => row.search.toLocaleLowerCase('ru').includes(query));
       const show = (!hideComplete?.checked || trip.dataset.ready !== 'true') && (!query || summaryMatches || matches.length > 0);
       if (!reviewerMode) trip.hidden = !show;
       if (show) visible++;
@@ -212,10 +214,15 @@
     empty.hidden = visible > 0;
   };
   const updateMetrics = () => {
-    const rows = [...root.querySelectorAll('[data-request-row]')];
-    const ready = trips.reduce((sum, trip) => sum + [...trip.querySelectorAll('[data-request-row]')].filter((row) => row.dataset.ready === 'true').length, 0);
     const values = document.querySelectorAll('.logistics-metrics .metric-value');
-    if (values.length === 4) [trips.filter((trip) => trip.dataset.ready !== 'true').length, rows.length, ready, rows.length - ready].forEach((value, index) => { values[index].textContent = String(value); });
+    if (values.length !== 4) return;
+    let requests = 0, ready = 0;
+    trips.forEach((trip) => {
+      const rows = [...trip.querySelectorAll('[data-request-row]')];
+      if (rows.length) { requests += rows.length; ready += rows.filter((row) => row.dataset.ready === 'true').length; }
+      else { const summary = JSON.parse(trip.dataset.summary || '[]'); requests += summary.length; ready += summary.filter((row) => row.ready).length; }
+    });
+    [trips.filter((trip) => trip.dataset.ready !== 'true').length, requests, ready, requests - ready].forEach((value, index) => { values[index].textContent = String(value); });
   };
   const refresh = (trip, initial = false) => {
     trip.querySelectorAll('[data-request-row]').forEach((row) => {

@@ -54,12 +54,12 @@ if(in_array($fixtureMode,['reviewer','reviewer-lazy'],true)){
  usort($trips,static fn(array $a,array $b):int=>(int)$b['business_id']<=>(int)$a['business_id']);
 }
 if($fixtureMode==='reviewer-empty'){$trips=[];$metrics=['trips'=>0,'requests'=>0,'ready'=>0,'problems'=>0];}
-if($fixtureMode==='reviewer-body'){
- $trip=$trips[0];$tripStatus=(string)$trip['review_status'];$basePath='/company/tn-review';
+if(in_array($fixtureMode,['reviewer-body','registration-body'],true)){
+ $trip=$trips[0];$tripStatus=(string)$trip['review_status'];$basePath=$reviewerMode?'/company/tn-review':'/company/logistics-assistant';
  require BASE_PATH.'/app/View/pages/company_logistics_helpers.php';
  require BASE_PATH.'/app/View/pages/company_logistics_trip_body.php';
  exit;
 }
-$deferTripBodies=$fixtureMode==='reviewer-lazy';
+$deferTripBodies=in_array($fixtureMode,['reviewer-lazy','registration-lazy'],true);
 $openTripId=0;
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/workspace-benchmark.css"><title>Регистрация времени загрузки</title></head><body><main class="<?=$reviewerMode?'content content--wide-workspace':''?>" style="padding:20px;max-width:1800px;margin:auto"><?php if($reviewerMode):?><div class="workspace-shell-1690"><?php endif;?><?php require BASE_PATH.'/app/View/pages/company_logistics_assistant.php';?><?php if($reviewerMode):?></div><?php endif;?></main></body></html>
