@@ -347,9 +347,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2e1488529e20f8dfdf9cd8318f413e2ff50dc7bc",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2e1488529e20f8dfdf9cd8318f413e2ff50dc7bc/tests/trip_completion_lazy_browser_test.mjs",
-      "verification_note": "2026-10-29: TN review list now loads lightweight summaries and fetches full forms only when a trip opens. MySQL, browser, contract and role-gate checks passed; document data and workflow rules were unchanged.",
+      "verified_sha": "e2aa85b16038c2882b6ae4c697691cf816c0fcb4",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/e2aa85b16038c2882b6ae4c697691cf816c0fcb4/tests/trip_completion_lazy_browser_test.mjs",
+      "verification_note": "2026-10-29: logistics assistant list now uses lightweight summaries and loads editable trip forms on demand. MySQL, browser, contract and role-route checks passed; document data and workflow rules were unchanged.",
       "owning_paths": [
         "app/Service/TripDocument*.php",
         "app/Service/TripCompletionService.php",
