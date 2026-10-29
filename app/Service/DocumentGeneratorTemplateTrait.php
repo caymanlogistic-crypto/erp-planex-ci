@@ -46,8 +46,8 @@ trait DocumentGeneratorTemplateTrait
                 'client_invoice' => ['Счёт клиенту', 'client_invoice_v1.docx'],
                 'client_act' => ['Акт клиенту', 'client_act_v1.docx'],
                 'client_upd_contract' => ['Договор клиенту для комплекта с УПД', 'client_upd_contract_v9.docx'],
-                'client_upd_invoice' => ['Счёт клиенту для комплекта с УПД', 'client_upd_invoice_v4.docx'],
-                'client_upd_status2' => ['УПД клиенту, статус 2', 'client_upd_status2_v8.docx'],
+                'client_upd_invoice' => ['Счёт клиенту для комплекта с УПД', 'client_upd_invoice_v5.docx'],
+                'client_upd_status2' => ['УПД клиенту, статус 2', 'client_upd_status2_v9.docx'],
             ];
             foreach ($defaults as $type => [$name, $filename]) {
                 $stmt = $pdo->prepare('SELECT t.id,t.name,v.sha256 FROM document_templates t LEFT JOIN document_template_versions v ON v.id=t.active_version_id WHERE t.document_type=? ORDER BY t.id LIMIT 1');
@@ -63,8 +63,8 @@ trait DocumentGeneratorTemplateTrait
                         ],
                         'carrier_sublease_crew' => ['074d6a082e1a07b823bf156814842e3cb345f1724bca1656e13e8be0d053719e'],
                         'client_upd_contract' => ['8da38048a57479485655ba115006428748221c0b0ce9d02ec66f09ef873150e9'],
-                        'client_upd_invoice' => ['10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd'],
-                        'client_upd_status2' => ['ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312', 'f13cc1b92512d5a19d7fe31fc1fa7847e0688ef4daa3b6f41da2afb5f365e203'],
+                        'client_upd_invoice' => ['10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd', '6b82b0509cd621e591b818bc31931bc3c50885c0d4565b439ba98fb848e9b1b0'],
+                        'client_upd_status2' => ['ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312', 'f13cc1b92512d5a19d7fe31fc1fa7847e0688ef4daa3b6f41da2afb5f365e203', '89666528c3b539faec1c5f7481f424138fb8362972e7edefdfe811e573a0b9f1'],
                     ];
                     if (isset($previousBuiltInSha[$type]) && in_array((string)($existing['sha256'] ?? ''), $previousBuiltInSha[$type], true)) {
                         $source = self::materializeBuiltInTemplate($filename);
@@ -123,9 +123,11 @@ trait DocumentGeneratorTemplateTrait
             'client_upd_contract_v9.docx' => 'c61123bfbd56bcd2c648f348c4dfebbfc10cb1e5af099b563af5a78e3cb4fc87',
             'client_invoice_v1.docx' => '10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
             'client_upd_invoice_v4.docx' => '6b82b0509cd621e591b818bc31931bc3c50885c0d4565b439ba98fb848e9b1b0',
+            'client_upd_invoice_v5.docx' => '4b0017c810e7fa10a6b8a1a9bcade9a2d67e5725f8a465ef7bccecf6e5c39935',
             'client_act_v1.docx' => '246b3394254d58a22d6ea492f9db56b2efcabef56d43de495766c2c902c6a1f9',
             'client_upd_status2_v1.docx' => 'cfb1669b79400014c2a3244e0c6f7c942213105938dc5253972115fdc88b91c6',
             'client_upd_status2_v8.docx' => '89666528c3b539faec1c5f7481f424138fb8362972e7edefdfe811e573a0b9f1',
+            'client_upd_status2_v9.docx' => '54b3e16b5300c70f02dc02f173215224e45e1d1978f417fc6e98731da30bf421',
         ];
         if (!isset($expected[$filename])) {
             throw new RuntimeException('Неизвестный встроенный DOCX-шаблон: ' . $filename);

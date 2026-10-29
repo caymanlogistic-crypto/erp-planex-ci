@@ -123,5 +123,17 @@ try{
     $active=[];foreach($rows() as $row)$active[$row['document_type']]=$row;
     $eq((string)$active['vehicle_lease_crew']['sha256'],'e83efd9117faf61357fb4dfb9e105c4a989f7bbed9fe062d84355c18dc0df79f','I v4 lease upgraded to v9');
     $eq((int)$pdo->query("SELECT COUNT(*) FROM document_template_versions WHERE template_id=".(int)$active['vehicle_lease_crew']['id'])->fetchColumn(),2,'I prior v4 retained');
-    echo "SEED_CASE_I=PASS\nDOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS\n";
+    echo "SEED_CASE_I=PASS\n";
+
+    $reset();
+    $userTemplate('client_upd_invoice','Счёт для УПД','client_upd_invoice_v4.docx');
+    $userTemplate('client_upd_status2','УПД','client_upd_status2_v8.docx');
+    App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
+    $active=[];foreach($rows() as $row)$active[$row['document_type']]=$row;
+    $eq((string)$active['client_upd_invoice']['sha256'],'4b0017c810e7fa10a6b8a1a9bcade9a2d67e5725f8a465ef7bccecf6e5c39935','J invoice upgraded without route');
+    $eq((string)$active['client_upd_status2']['sha256'],'54b3e16b5300c70f02dc02f173215224e45e1d1978f417fc6e98731da30bf421','J UPD upgraded without route');
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM document_template_versions")->fetchColumn(),11,'J previous versions retained');
+    App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM document_template_versions")->fetchColumn(),11,'J idempotent');
+    echo "SEED_CASE_J=PASS\nDOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS\n";
 }finally{$rm($store);try{if($ownsDatabase)$admin->exec("DROP DATABASE IF EXISTS $qd");elseif(isset($pdo))cleanCompanyPoolDatabase($pdo);}catch(Throwable){}}

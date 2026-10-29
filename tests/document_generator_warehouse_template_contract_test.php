@@ -24,14 +24,14 @@ $description = $route->invoke(null, [
 ]);
 $check($description === 'Место загрузки: Склад Север; Прямой адрес. Место выгрузки: Склад Юг.', 'Client route covers both ends and deduplicates loading');
 $materialize = new ReflectionMethod(Generator::class, 'materializeBuiltInTemplate');
-foreach (['contract_vehicle_lease_crew_v9.docx'=>1, 'client_upd_contract_v9.docx'=>1, 'client_upd_invoice_v4.docx'=>0, 'client_upd_status2_v8.docx'=>0] as $name=>$repeatRows) {
+foreach (['contract_vehicle_lease_crew_v9.docx'=>1, 'client_upd_contract_v9.docx'=>1, 'client_upd_invoice_v5.docx'=>0, 'client_upd_status2_v9.docx'=>0] as $name=>$repeatRows) {
     $path = $materialize->invoke(null, $name);
     try {
         $validation = Template::validateDocxFile($path);
         $check(($validation['ok'] ?? false) === true, $name.' structure');
         $check((int)($validation['repeat_rows'] ?? -1) === $repeatRows, $name.' request row contract');
         if (str_starts_with($name, 'client_upd_invoice_') || str_starts_with($name, 'client_upd_status2_')) {
-            $check(in_array('service.route', $validation['placeholders'] ?? [], true), $name.' route placeholder');
+            $check(!in_array('service.route', $validation['placeholders'] ?? [], true), $name.' excludes route from printed service');
         }
     } finally {
         @unlink($path);

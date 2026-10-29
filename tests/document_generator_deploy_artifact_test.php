@@ -37,9 +37,11 @@ $required=[
 'client_upd_contract_v9.docx'=>'c61123bfbd56bcd2c648f348c4dfebbfc10cb1e5af099b563af5a78e3cb4fc87',
 'client_invoice_v1.docx'=>'10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
 'client_upd_invoice_v4.docx'=>'6b82b0509cd621e591b818bc31931bc3c50885c0d4565b439ba98fb848e9b1b0',
+'client_upd_invoice_v5.docx'=>'4b0017c810e7fa10a6b8a1a9bcade9a2d67e5725f8a465ef7bccecf6e5c39935',
 'client_act_v1.docx'=>'246b3394254d58a22d6ea492f9db56b2efcabef56d43de495766c2c902c6a1f9',
 'client_upd_status2_v1.docx'=>'cfb1669b79400014c2a3244e0c6f7c942213105938dc5253972115fdc88b91c6',
 'client_upd_status2_v8.docx'=>'89666528c3b539faec1c5f7481f424138fb8362972e7edefdfe811e573a0b9f1',
+'client_upd_status2_v9.docx'=>'54b3e16b5300c70f02dc02f173215224e45e1d1978f417fc6e98731da30bf421',
 ];
 $tmp=sys_get_temp_dir().'/planex_docgen_artifact_'.getmypid().'_'.bin2hex(random_bytes(4));if(!mkdir($tmp,0700,true)&&!is_dir($tmp))throw new RuntimeException('Unable to create artifact temp directory.');$rm=static function(string $path)use(&$rm):void{if(!file_exists($path))return;if(!is_dir($path)||is_link($path)){@unlink($path);return;}foreach(array_diff(scandir($path)?:[],['.','..'])as$name)$rm($path.DIRECTORY_SEPARATOR.$name);@rmdir($path);};
 try{exec(escapeshellarg($tar).' -xzf '.escapeshellarg($archive).' -C '.escapeshellarg($tmp),$ignored,$rc);if($rc!==0)throw new RuntimeException('Unable to extract deploy artifact.');foreach($required as$name=>$expectedSha){$parts=glob($tmp.'/resources/document-templates/'.$name.'.b64.part*')?:[];sort($parts,SORT_STRING);if($parts===[])throw new RuntimeException('Missing built-in template parts in deploy artifact: '.$name);$bytes='';foreach($parts as$part){$encoded=preg_replace('/\s+/','',(string)file_get_contents($part))??'';$decoded=base64_decode($encoded,true);if(!is_string($decoded)||$decoded==='')throw new RuntimeException('Invalid base64 part in deploy artifact: '.basename($part));$bytes.=$decoded;}$actual=hash('sha256',$bytes);if(!hash_equals($expectedSha,$actual))throw new RuntimeException('Built-in template SHA mismatch in deploy artifact: '.$name);printf("DEPLOY_ARTIFACT_TEMPLATE=%s sha256=%s parts=%d\n",$name,$actual,count($parts));}echo "DOCUMENT_GENERATOR_DEPLOY_ARTIFACT=PASS\n";}finally{$rm($tmp);if($owned&&$tmpBase!=='')$rm($tmpBase);}
