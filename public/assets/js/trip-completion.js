@@ -2,6 +2,7 @@
   'use strict';
   const root = document.querySelector('[data-logistics-assistant]');
   if (!root) return;
+  const reviewerMode = root.dataset.reviewerMode === '1';
 
   const filter = document.querySelector('.logistics-filter');
   const search = filter?.querySelector('input[name="q"]');
@@ -196,7 +197,7 @@
       const rows = [...trip.querySelectorAll('[data-request-row]')];
       const matches = rows.filter((row) => row.querySelector('.logistics-request-route')?.textContent.toLocaleLowerCase('ru').includes(query));
       const show = (!hideComplete?.checked || trip.dataset.ready !== 'true') && (!query || summaryMatches || matches.length > 0);
-      trip.hidden = !show;
+      if (!reviewerMode) trip.hidden = !show;
       if (show) visible++;
       rows.forEach((row) => { row.hidden = !!query && !summaryMatches && !matches.includes(row); });
       if (show && query && matches.length && !summaryMatches) trip.open = true;

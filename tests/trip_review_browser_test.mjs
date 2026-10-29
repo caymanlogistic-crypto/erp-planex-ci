@@ -85,6 +85,9 @@ try {
   assert.ok(layout.toolbarLeft>layout.panelLeft && layout.workspaceLeft>layout.panelLeft && layout.workspaceRight<layout.panelRight,'Toolbar and trip list stay inside standard panel');
   assert.equal(await page.locator('.logistics-metrics').count(),0,'Reviewer statistics are removed');
   assert.equal(await page.locator('[data-review-found]').innerText(),'3','Found count includes all three review states');
+  assert.equal(await page.locator('.lab-review-group-head').count(),0,'Reviewer list has no status dividers');
+  assert.equal(await page.locator('.logistics-trip-list').count(),1,'Reviewer has one continuous trip list');
+  assert.deepEqual(await page.locator('.logistics-trip').evaluateAll(trips=>trips.map(trip=>[trip.querySelector('.lab-trip-identity b').textContent.trim(),trip.dataset.reviewStatus])),[['Рейс #245','work'],['Рейс #244','review'],['Рейс #243','archive']],'Reviewer trips descend by number across statuses');
   assert.equal(await page.locator('.registry-ui-checkbox').count(),0,'Status controls use canonical tabs, not checkboxes');
   assert.deepEqual(await page.locator('[data-review-tab]').evaluateAll(buttons=>buttons.map(button=>[button.dataset.reviewTab,button.querySelector('b').textContent,button.getAttribute('aria-pressed')])),[['all','3','true'],['work','1','false'],['review','1','false'],['archive','1','false']],'Reviewer uses one selected canonical tab with counts');
   if(process.env.PLANEX_SCREENSHOT_DIR){fs.mkdirSync(process.env.PLANEX_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-toolbar-1440.png'),fullPage:true});}
@@ -97,17 +100,17 @@ try {
   if(process.env.PLANEX_SCREENSHOT_DIR){await page.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-toolbar-390.png'),fullPage:true});}
   await page.setViewportSize({width:1440,height:900});
   await page.locator('[data-review-tab="work"]').click();
-  assert.equal(await page.locator('.lab-review-group--work').isVisible(),true);
-  assert.equal(await page.locator('.lab-review-group--review').isVisible(),false);
+  assert.equal(await page.locator('.logistics-trip[data-review-status="work"]').isVisible(),true);
+  assert.equal(await page.locator('.logistics-trip[data-review-status="review"]').isVisible(),false);
   assert.equal(await page.locator('[data-review-found]').innerText(),'1');
   await page.locator('[data-review-tab="work"]').click();
   assert.equal(await page.locator('[data-review-tab="all"]').getAttribute('aria-pressed'),'true','Clicking selected status returns to all');
   await page.locator('[data-review-tab="review"]').focus();
   await page.keyboard.press('Enter');
   assert.equal(await page.locator('[data-review-tab="review"]').getAttribute('aria-pressed'),'true','Keyboard activates a status tab');
-  assert.equal(await page.locator('.lab-review-group--work').isVisible(),false);
+  assert.equal(await page.locator('.logistics-trip[data-review-status="work"]').isVisible(),false);
   await page.locator('[data-review-tab="archive"]').click();
-  assert.equal(await page.locator('.lab-review-group--archive').isVisible(),true);
+  assert.equal(await page.locator('.logistics-trip[data-review-status="archive"]').isVisible(),true);
   await page.locator('[data-review-reset]').click();
   assert.equal(await page.locator('[data-review-found]').innerText(),'3');
   assert.equal(await page.locator('[data-review-reset]').isHidden(),true);
@@ -129,17 +132,17 @@ try {
   const toolbarStyle=await page.evaluate(()=>{const search=document.querySelector('.registry-ui-search'),tab=document.querySelector('[data-review-tab]'),toolbar=document.querySelector('.registry-ui-toolbar');return {searchWidth:search.getBoundingClientRect().width,searchHeight:search.getBoundingClientRect().height,tabHeight:tab.getBoundingClientRect().height,tabBorder:getComputedStyle(tab).borderBottomWidth,toolbarBackground:getComputedStyle(toolbar).backgroundColor,scroll:document.documentElement.scrollWidth,viewport:innerWidth};});
   assert.deepEqual(toolbarStyle,{searchWidth:230,searchHeight:32,tabHeight:37,tabBorder:'2px',toolbarBackground:'rgb(247, 245, 240)',scroll:1280,viewport:1280},'Reviewer tabs and toolbar use approved dimensions and surface');
   if(process.env.PLANEX_SCREENSHOT_DIR){fs.mkdirSync(process.env.PLANEX_SCREENSHOT_DIR,{recursive:true});await reviewHead.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-1920.png')});await reviewHead.locator('.page-head-left').screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-left-1920.png')});}
-  assert.equal(await page.locator('.lab-review-group--work').isVisible(),true,'Reviewer sees work trips alongside review trips');
-  assert.equal(await page.locator('.lab-review-group--review').isVisible(),true);
-  assert.equal(await page.locator('.lab-review-group--archive').isVisible(),true);
-  await page.locator('.lab-review-group--work summary').click();
-  assert.equal(await page.locator('.lab-review-group--work .lab-docs-name').count(),1,'Reviewer sees scans on work trips');
-  assert.equal(await page.locator('.lab-review-group--work .lab-docs-download').count(),1,'Reviewer can download scans on work trips');
-  assert.equal(await page.locator('.lab-review-group--work [data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Work trips are read only for reviewer');
-  assert.equal(await page.locator('.lab-review-group--work [data-review-form]').count(),0,'Reviewer cannot move an unfinished trip to archive');
-  await page.locator('.lab-review-group--review summary').click();
-  assert.equal(await page.locator('.lab-review-group--review [data-autosave-form] input[name="pickup_interval"]').first().isEnabled(),true,'Reviewer must be able to edit a trip under review');
-  assert.deepEqual((await page.locator('.lab-review-group--review .logistics-trip-toolbar button[type="submit"]').allTextContents()).map(text=>text.trim()),['Вернуть на доработку','Переместить в архив'],'Return action precedes archive');
+  assert.equal(await page.locator('.logistics-trip[data-review-status="work"]').isVisible(),true,'Reviewer sees work trips alongside review trips');
+  assert.equal(await page.locator('.logistics-trip[data-review-status="review"]').isVisible(),true);
+  assert.equal(await page.locator('.logistics-trip[data-review-status="archive"]').isVisible(),true);
+  await page.locator('.logistics-trip[data-review-status="work"] summary').click();
+  assert.equal(await page.locator('.logistics-trip[data-review-status="work"] .lab-docs-name').count(),1,'Reviewer sees scans on work trips');
+  assert.equal(await page.locator('.logistics-trip[data-review-status="work"] .lab-docs-download').count(),1,'Reviewer can download scans on work trips');
+  assert.equal(await page.locator('.logistics-trip[data-review-status="work"] [data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Work trips are read only for reviewer');
+  assert.equal(await page.locator('.logistics-trip[data-review-status="work"] [data-review-form]').count(),0,'Reviewer cannot move an unfinished trip to archive');
+  await page.locator('.logistics-trip[data-review-status="review"] summary').click();
+  assert.equal(await page.locator('.logistics-trip[data-review-status="review"] [data-autosave-form] input[name="pickup_interval"]').first().isEnabled(),true,'Reviewer must be able to edit a trip under review');
+  assert.deepEqual((await page.locator('.logistics-trip[data-review-status="review"] .logistics-trip-toolbar button[type="submit"]').allTextContents()).map(text=>text.trim()),['Вернуть на доработку','Переместить в архив'],'Return action precedes archive');
   await page.getByRole('button',{name:'Переместить в архив'}).click();
   await dialog.waitFor({state:'visible'});
   assert.match(await dialog.innerText(),/Нет ТН.*271941/s);
@@ -147,21 +150,21 @@ try {
   await page.waitForFunction(()=>document.querySelector('.lab-review-dialog')?.open===false);
   assert.deepEqual(reviewerActions,['archive'],'Archive action must be submitted through reviewer route');
   await page.locator('[data-review-tab="archive"]').click();
-  await page.locator('.lab-review-group--archive summary').click();
-  assert.equal(await page.locator('.lab-review-group--archive [data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Archive must be read only');
+  await page.locator('.logistics-trip[data-review-status="archive"] summary').click();
+  assert.equal(await page.locator('.logistics-trip[data-review-status="archive"] [data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Archive must be read only');
   await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Вернуть из архива'}).click()]);
   assert.deepEqual(reviewerActions,['archive','restore'],'Only reviewer can restore an archived trip');
-  await page.locator('.lab-review-group--review summary').click();
+  await page.locator('.logistics-trip[data-review-status="review"] summary').click();
   await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Вернуть на доработку'}).click()]);
   assert.deepEqual(reviewerActions,['archive','restore','return_work'],'Reviewer can return a trip to registrar work');
   await page.setViewportSize({width:390,height:844});
-  await page.locator('.lab-review-group--review summary').click();
+  await page.locator('.logistics-trip[data-review-status="review"] summary').click();
   const mobile=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));
   assert.ok(mobile.scroll<=mobile.viewport+1,'Reviewer actions must not create mobile horizontal overflow');
   if(process.env.PLANEX_SCREENSHOT_DIR){await reviewHead.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-390.png')});await reviewHead.locator('.page-head-left').screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-left-390.png')});}
   await page.goto('http://127.0.0.1:'+server.address().port+'/reviewer-empty',{waitUntil:'networkidle'});
   assert.equal(await page.locator('.tn-review-shell').isVisible(),true,'Empty reviewer state keeps the standard panel');
-  assert.equal(await page.locator('.lab-review-group--review').isVisible(),true,'Empty reviewer state keeps its group heading');
+  assert.equal(await page.locator('.logistics-trip-list').count(),1,'Empty reviewer state keeps the continuous list');
   assert.equal(await page.locator('.logistics-trip').count(),0,'Empty reviewer state has no trip rows');
   if(process.env.PLANEX_SCREENSHOT_DIR){await page.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-empty-1920.png')});}
   assert.deepEqual(errors,[],'no browser errors');

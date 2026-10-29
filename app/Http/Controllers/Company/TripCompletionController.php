@@ -58,8 +58,10 @@ final class TripCompletionController
                 $trips[$index]=array_merge($trip,$details);
             }
             $order=['work'=>0,'review'=>1,'archive'=>2];
-            usort($trips,static fn(array $a,array $b):int=>($order[$a['review_status']]??3)<=>($order[$b['review_status']]??3)
-                ?: ((int)$b['business_id']<=>(int)$a['business_id']));
+            usort($trips,fn(array $a,array $b):int=>$this->reviewerMode
+                ? ((int)$b['business_id']<=>(int)$a['business_id']) ?: ((int)$b['id']<=>(int)$a['id'])
+                : (($order[$a['review_status']]??3)<=>($order[$b['review_status']]??3)
+                    ?: ((int)$b['business_id']<=>(int)$a['business_id'])));
             $openTripId=max(0,(int)($_GET['trip_id']??0));
         } catch (DomainException $exception) { $error=$exception->getMessage(); }
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }

@@ -62,13 +62,13 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 </form>
 <?php endif;?>
 <section class="logistics-workspace" aria-label="Рейсы для обработки" data-logistics-assistant data-reviewer-mode="<?=$reviewerMode?'1':'0'?>">
-  <?php foreach(['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив'] as $groupStatus=>$groupName):
-    $groupTrips=array_values(array_filter($trips,static fn(array $trip):bool=>$trip['review_status']===$groupStatus));?>
+  <?php foreach($reviewerMode?['all'=>'']:['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив'] as $groupStatus=>$groupName):
+    $groupTrips=$reviewerMode?$trips:array_values(array_filter($trips,static fn(array $trip):bool=>$trip['review_status']===$groupStatus));?>
   <section class="lab-review-group lab-review-group--<?=e($groupStatus)?>" data-review-group="<?=e($groupStatus)?>" <?=(!$reviewerMode&&$groupStatus!=='work')?'hidden':''?>>
-    <div class="lab-review-group-head"><h2><?=e($groupName)?></h2><span class="lab-review-group-count" aria-label="Количество рейсов"><?=count($groupTrips)?></span></div>
+    <?php if(!$reviewerMode):?><div class="lab-review-group-head"><h2><?=e($groupName)?></h2><span class="lab-review-group-count" aria-label="Количество рейсов"><?=count($groupTrips)?></span></div><?php endif;?>
     <div class="logistics-trip-list">
-  <?php foreach($groupTrips as $trip):$open=(int)($openTripId??0)===(int)$trip['id'];$noTnCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)===1));$timeCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)!==1&&!empty($request['arrived_at'])&&!empty($request['departed_at'])));$processedCount=$timeCount+$noTnCount;?>
-    <details class="logistics-trip panel" data-trip-id="<?=(int)$trip['id']?>" data-review-status="<?=e($groupStatus)?>" data-review-version="<?=(int)$trip['review_version']?>" <?=$open?'open':''?>>
+  <?php foreach($groupTrips as $trip):$tripStatus=(string)$trip['review_status'];$open=(int)($openTripId??0)===(int)$trip['id'];$noTnCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)===1));$timeCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)!==1&&!empty($request['arrived_at'])&&!empty($request['departed_at'])));$processedCount=$timeCount+$noTnCount;?>
+    <details class="logistics-trip panel" data-trip-id="<?=(int)$trip['id']?>" data-review-status="<?=e($tripStatus)?>" data-review-version="<?=(int)$trip['review_version']?>" <?=$open?'open':''?>>
       <summary class="logistics-trip-summary">
         <span class="logistics-trip-chevron" aria-hidden="true"></span>
         <span class="lab-trip-identity"><b>Рейс #<?=e((string)$trip['business_id'])?></b><strong class="lab-trip-status <?=($trip['status']??'')==='in_progress'?'is-progress':'is-delivered'?>"><?=($trip['status']??'')==='in_progress'?'Идёт вывоз':'Груз сдан'?></strong><?php if(!empty($trip['actual_start_date'])):?><small title="Фактическая дата начала рейса">Выезд: <?=e($fmtDate($trip['actual_start_date']))?></small><?php endif;?><?php if(!empty($trip['actual_end_date'])):?><small title="Фактическая дата сдачи груза">Сдача: <?=e($fmtDate($trip['actual_end_date']))?></small><?php endif;?></span>
@@ -83,11 +83,11 @@ $statusChoice=static function(string $name,string $selected,array $options):void
           <div>
             <a class="btn btn-secondary" href="<?=app_url($basePath.'/'.(int)$trip['id'].'/report')?>">Скачать сводный отчёт</a>
             <a class="btn btn-secondary" href="<?=app_url($basePath.'/'.(int)$trip['id'].'/package')?>">Скачать полный комплекс</a>
-            <?php if($reviewerMode&&$groupStatus==='review'):?>
+            <?php if($reviewerMode&&$tripStatus==='review'):?>
               <form class="lab-review-form" method="post" action="<?=app_url($basePath.'/'.(int)$trip['id'].'/review')?>" data-review-form><?=csrfField()?><input type="hidden" name="action" value="return_work"><input type="hidden" name="version" value="<?=(int)$trip['review_version']?>"><button type="submit" class="btn btn-secondary lab-review-submit">Вернуть на доработку</button></form>
             <?php endif;?>
-            <?php if(($reviewerMode&&$groupStatus!=='work')||(!$reviewerMode&&$groupStatus==='work')):?>
-              <form class="lab-review-form" method="post" action="<?=app_url($basePath.'/'.(int)$trip['id'].'/review')?>" data-review-form><?=csrfField()?><input type="hidden" name="action" value="<?=$reviewerMode?($groupStatus==='archive'?'restore':'archive'):'submit'?>"><input type="hidden" name="version" value="<?=(int)$trip['review_version']?>"><button type="submit" class="btn <?=(!$reviewerMode||$groupStatus==='review')?'btn-primary':'btn-secondary'?> lab-review-submit"><?=$reviewerMode?($groupStatus==='archive'?'Вернуть из архива':'Переместить в архив'):'Передать на проверку'?></button></form>
+            <?php if(($reviewerMode&&$tripStatus!=='work')||(!$reviewerMode&&$tripStatus==='work')):?>
+              <form class="lab-review-form" method="post" action="<?=app_url($basePath.'/'.(int)$trip['id'].'/review')?>" data-review-form><?=csrfField()?><input type="hidden" name="action" value="<?=$reviewerMode?($tripStatus==='archive'?'restore':'archive'):'submit'?>"><input type="hidden" name="version" value="<?=(int)$trip['review_version']?>"><button type="submit" class="btn <?=(!$reviewerMode||$tripStatus==='review')?'btn-primary':'btn-secondary'?> lab-review-submit"><?=$reviewerMode?($tripStatus==='archive'?'Вернуть из архива':'Переместить в архив'):'Передать на проверку'?></button></form>
             <?php endif;?>
           </div>
         </div>
