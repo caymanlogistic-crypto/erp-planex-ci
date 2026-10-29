@@ -32,21 +32,20 @@
     let visible = 0;
     const tabCounts = {all: 0, work: 0, review: 0, archive: 0};
     root.querySelectorAll('[data-review-group]').forEach((group) => {
-      const enabled = reviewerMode
-        ? activeTab === 'all' || group.dataset.reviewGroup === activeTab
-        : group.dataset.reviewGroup === 'work' || !!showAll?.checked;
+      const enabled = group.dataset.reviewGroup === 'all' || group.dataset.reviewGroup === 'work' || !!showAll?.checked;
       let matches = 0;
       group.querySelectorAll('.logistics-trip').forEach((trip) => {
         const found = !term || trip.textContent.toLowerCase().includes(term);
-        trip.hidden = !enabled || !found;
-        if (found) matches++;
+        const status = trip.dataset.reviewStatus;
+        trip.hidden = !enabled || !found || (reviewerMode && activeTab !== 'all' && status !== activeTab);
+        if (found) {
+          if (reviewerMode && Object.hasOwn(tabCounts, status)) tabCounts[status]++;
+          tabCounts.all++;
+          if (!trip.hidden) matches++;
+        }
       });
       group.hidden = !enabled || (term !== '' && matches === 0);
       if (enabled) visible += matches;
-      if (reviewerMode) {
-        tabCounts[group.dataset.reviewGroup] = matches;
-        tabCounts.all += matches;
-      }
     });
     root.querySelector('.lab-review-empty').hidden = visible > 0;
     if (reviewerMode) {

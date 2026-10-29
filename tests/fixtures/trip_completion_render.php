@@ -51,6 +51,7 @@ if($fixtureMode==='reviewer'){
  $workTrip['review_status']='work';$workTrip['review_version']=0;
  $workTrip['requests'][0]['id']=31;
  $trips[]=$workTrip;
+ usort($trips,static fn(array $a,array $b):int=>(int)$b['business_id']<=>(int)$a['business_id']);
 }
 if($fixtureMode==='reviewer-empty'){$trips=[];$metrics=['trips'=>0,'requests'=>0,'ready'=>0,'problems'=>0];}
 $openTripId=0;
