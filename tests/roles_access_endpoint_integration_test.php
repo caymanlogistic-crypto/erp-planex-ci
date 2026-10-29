@@ -87,7 +87,7 @@ foreach ($routePages as $file => $pageKeys) {
     foreach ($pageKeys as $pageKey) endpointExpect(str_contains($source, $pageKey), "{$file} missing {$pageKey}");
     $declarationCount += count($counts);
 }
-endpointExpect($declarationCount === 254, 'owned inventory must contain exactly 252 protected and two token-gated archive declarations');
+endpointExpect($declarationCount === 256, 'owned inventory must contain exactly 254 protected and two token-gated archive declarations');
 
 $ownedSources = '';
 foreach (array_keys($routePages) as $file) $ownedSources .= file_get_contents($root . '/app/Http/Routes/' . $file);
