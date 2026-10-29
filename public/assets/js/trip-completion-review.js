@@ -35,7 +35,7 @@
       const enabled = group.dataset.reviewGroup === 'all' || group.dataset.reviewGroup === 'work' || !!showAll?.checked;
       let matches = 0;
       group.querySelectorAll('.logistics-trip').forEach((trip) => {
-        const found = !term || trip.textContent.toLowerCase().includes(term);
+        const found = !term || (trip.dataset.search || trip.textContent).toLowerCase().includes(term);
         const status = trip.dataset.reviewStatus;
         trip.hidden = !enabled || !found || (reviewerMode && activeTab !== 'all' && status !== activeTab);
         if (found) {
@@ -54,10 +54,12 @@
       resetFilter.hidden = !term && activeTab === 'all';
     }
   };
-  root.querySelectorAll('.logistics-trip[data-review-status]').forEach((trip) => {
+  const enforceReadonly = (trip) => {
     if (trip.dataset.reviewStatus === (reviewerMode ? 'review' : 'work')) return;
     trip.querySelectorAll('[data-autosave-form] input, [data-autosave-form] textarea, [data-upload-form] input, [data-upload-form] button, .lab-docs-remove, .lab-docs-no-tn').forEach((control) => { control.disabled = true; });
-  });
+  };
+  root.querySelectorAll('.logistics-trip[data-review-status]').forEach(enforceReadonly);
+  root.addEventListener('trip-body-loaded', (event) => enforceReadonly(event.detail.trip));
   search?.addEventListener('input', refreshFilter);
   reviewFilters?.addEventListener('submit', (event) => event.preventDefault());
   showAll?.addEventListener('change', refreshFilter);

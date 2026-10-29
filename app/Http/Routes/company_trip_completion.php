@@ -6,6 +6,7 @@ require_once base_path('app/Http/Controllers/Company/TripCompletionController.ph
 $tripCompletionController=new \App\Http\Controllers\Company\TripCompletionController($config,$db);
 $tripCompletionPage='company.documents.collection';
 $router->get('/company/logistics-assistant',[$tripCompletionController,'index'],$tripCompletionPage);
+$router->get('/company/logistics-assistant/{tripId}/body',[$tripCompletionController,'tripBody'],$tripCompletionPage);
 $router->get('/company/logistics-assistant/{tripId}/review',[$tripCompletionController,'reviewPreview'],$tripCompletionPage);
 $router->post('/company/logistics-assistant/{tripId}/review',[$tripCompletionController,'reviewAction'],$tripCompletionPage);
 $router->post('/company/logistics-assistant/{tripId}/package-stage',[$tripCompletionController,'packageStage'],$tripCompletionPage);
@@ -19,6 +20,7 @@ $router->get('/company/logistics-assistant/{tripId}/report',[$tripCompletionCont
 $router->get('/company/logistics-assistant/{tripId}/package',[$tripCompletionController,'package'],$tripCompletionPage);
 $tnReviewPage='company.documents.tn_review';
 $router->get('/company/tn-review',[$tripCompletionController,'tnReview'],$tnReviewPage);
+$router->get('/company/tn-review/{tripId}/body',[$tripCompletionController,'tnReviewBody'],$tnReviewPage);
 $router->get('/company/tn-review/{tripId}/review',[$tripCompletionController,'tnReviewPreview'],$tnReviewPage);
 $router->post('/company/tn-review/{tripId}/review',[$tripCompletionController,'tnReviewAction'],$tnReviewPage);
 $router->post('/company/tn-review/{tripId}/requests/{requestId}',[$tripCompletionController,'tnReviewSave'],$tnReviewPage);
