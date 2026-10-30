@@ -48,6 +48,10 @@
   if(openTripId || (savedState && Object.hasOwn(savedState,'openTripId'))) {
     trips.forEach(trip=>{trip.open=trip.dataset.tripId===openTripId;});
   }
+  const docDialog=page.querySelector('[data-closing-doc-dialog]');
+  const sourceList=page.querySelector('.closing-source-list');
+  let docOpener=null;
+  let activeTrip=null;
   function saveState() {
     if(!stateKey) return;
     try { localStorage.setItem(stateKey,JSON.stringify({openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
@@ -85,8 +89,11 @@
       const matchesSearch=requestedIds&&!idSearch?false:idSearch?idSearch.has(trip.dataset.businessId):trip.dataset.search.includes(query);
       if(matchesEntity&&matchesQuarter&&matchesManager&&matchesSearch){tabCounts.all++;if(Object.hasOwn(tabCounts,state))tabCounts[state]++;}
       const matches=filter==='all'||state===filter;
-      trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesQuarter&&matchesManager);
-      if (!trip.hidden) visible++;
+      const rowVisible=matchesSearch&&matches&&matchesEntity&&matchesQuarter&&matchesManager;
+      // The details element lives inside the modal while it is open. Hiding it
+      // when its status moves to another tab collapses the entire modal body.
+      trip.hidden=trip===activeTrip&&docDialog?.open?false:!rowVisible;
+      if (rowVisible) visible++;
     }
     filters.forEach(button=>{const badge=button.querySelector('[data-closing-filter-count]');if(badge)badge.textContent=String(tabCounts[button.dataset.closingFilter]??0);});
     count.textContent=String(visible);
@@ -109,16 +116,13 @@
   sortReportRows();
   render();
   exportLink?.addEventListener('click',event=>{if(exportLink.getAttribute('aria-disabled')==='true')event.preventDefault();});
-  const docDialog=page.querySelector('[data-closing-doc-dialog]');
-  const sourceList=page.querySelector('.closing-source-list');
-  let docOpener=null;
-  let activeTrip=null;
   const openDocuments=row=>{
     const trip=trips.find(item=>item.dataset.tripId===row.dataset.reportTripId);
     if(!trip||!docDialog||!sourceList)return;
     docOpener=row;
     activeTrip=trip;
     trip.open=true;
+    trip.hidden=false;
     docDialog.querySelector('#closing-doc-title').textContent=`Закрывающие документы рейса №${trip.dataset.businessId}`;
     docDialog.querySelector('[data-closing-doc-body]').replaceChildren(trip);
     docDialog.showModal();
@@ -135,7 +139,7 @@
   docDialog?.addEventListener('click',event=>{if(event.target===docDialog)docDialog.close();});
   docDialog?.addEventListener('close',()=>{
     if(activeTrip){sourceList.append(activeTrip);activeTrip.open=false;activeTrip=null;}
-    saveState();docOpener?.focus();docOpener=null;
+    render();saveState();docOpener?.focus();docOpener=null;
   });
   if(openTripId){const row=reportRows.find(item=>item.dataset.reportTripId===openTripId&&!item.hidden);if(row)openDocuments(row);}
   if((requestedTripId && trips.some(trip=>trip.dataset.tripId===requestedTripId)) || stage) saveState();
@@ -191,6 +195,7 @@
       if (!updated) throw new Error('Не удалось обновить строку рейса. Обновите страницу.');
       trip.dataset.state=updated.dataset.state;
       trip.replaceChildren(...updated.children);
+      trip.open=true;
       const updatedReport=result.querySelector('.lab-grid tbody');
       const reportBody=reportGrid?.querySelector('tbody');
       if(updatedReport&&reportBody){
@@ -199,6 +204,10 @@
         reportRows=[...reportBody.querySelectorAll('[data-report-trip-id]')];
         sortReportRows();
         if(openerTripId)docOpener=reportRows.find(row=>row.dataset.reportTripId===openerTripId)||null;
+      }
+      if(filter!=='all'&&trip.dataset.state!==filter){
+        filter='all';
+        filters.forEach(button=>{const active=button.dataset.closingFilter==='all';button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
       }
       render();
       window.scrollTo(scrollX,scrollY);
