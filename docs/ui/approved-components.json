@@ -347,8 +347,8 @@
       "table_surfaces": [{"id":"main","selector":".registry-ui-card > .table-scroll > table","row_selector":"tbody > tr:not(:has(td[colspan]))"}],
       "table_states": [{"id":"initial","visible":["main"],"data":{"main":"populated"}}],
       "async_search": {"applicable": false, "reason": "Поиск фильтрует загруженные договоры локально."},
-      "contract_sources": ["app/View/pages/company_logist_contracts.php", "app/Service/LogistContractService.php", "tests/logist_contracts_browser_test.mjs"],
-      "required_contracts": ["tests/logist_contract_integration_test.php"]
+      "contract_sources": ["app/View/pages/company_logist_contracts.php", "app/Service/LogistContractService.php", "tests/logist_contracts_browser_test.mjs", "tests/logist_contract_integration_test.php"],
+      "required_contracts": []
     },
     {
       "id": "route-executors",
