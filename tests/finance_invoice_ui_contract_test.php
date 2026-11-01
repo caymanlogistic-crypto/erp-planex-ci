@@ -18,7 +18,7 @@ $service='app/Service/FinanceInvoiceService.php';
 uiMustContain($view,'$stageCards','invoice timeline is projected into stage cards');
 uiMustContain($view,'Этапы оплаты','payment stages are the primary payment column');
 uiMustNotContain($view,'Статус счёта','separate invoice status column remains removed');
-uiMustContain($view,"$statusText = 'Оплачен';",'closed stage shows current paid fact');
+uiMustContain($view,'$statusText = \'Оплачен\';','closed stage shows current paid fact');
 uiMustNotContain($view,'Оплачен с просрочкой','closed stage hides historical lateness');
 uiMustContain($view,'.invoice-stage-card.is-paid{background:transparent;border-color:var(--border)}','paid stage card no longer owns success background');
 uiMustContain($view,'td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stages > .invoice-stage-card:not(.is-paid))){background:var(--success-bg)}','fully paid invoice paints the whole payment cell');
@@ -45,7 +45,7 @@ uiMustContain($css,'.table-card[data-invoice-grid]','invoice grid has a scoped w
 uiMustContain($css,'overflow-x: auto;','invoice table overflow stays inside its scroll container');
 uiMustContain($css,'width: max-content;','wide payment stages may keep intrinsic table width without expanding the page');
 uiMustContain($view,'Частично · просрочка','partial overdue state remains explicit');
-uiMustContain($view,"$statusClass = 'badge badge-warning';",'partial overdue uses warning badge');
+uiMustContain($view,'$statusClass = \'badge badge-warning\';','partial overdue uses warning badge');
 uiMustContain($view,'is-overdue-remaining','overdue remainder uses dedicated styling');
 uiMustContain($view,'var(--danger-text)','overdue remainder uses system danger color');
 uiMustContain($view,'Ожидается событие','event-driven stage waits for event');
