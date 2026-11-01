@@ -75,19 +75,24 @@ if (!defined('PLANEX_DOCUMENT_SCHEMA_PROBE_LIBRARY_ONLY')) {
             if (count($companies) < 1 || count($companies) > 200) {
                 throw new RuntimeException('COMPANY_SCOPE');
             }
-            $allReady = true;
+            $unready = 0;
+            $missingMigrationChecks = 0;
+            $missingColumnChecks = 0;
             foreach ($companies as $company) {
                 if (trim((string) $company['db_identifier']) === '') {
                     throw new RuntimeException('COMPANY_SCOPE');
                 }
                 $tenant = $connect(companyDatabaseConfig($config, $company));
                 $state = DocumentSchemaReadinessProbe::inspect($tenant);
-                $allReady = $allReady && $state['ready'];
-                echo json_encode(['company_id' => (int) $company['id']] + $state,
-                    JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
+                if (!$state['ready']) $unready++;
+                $missingMigrationChecks += count($state['missing_migrations']);
+                $missingColumnChecks += count($state['missing_columns']);
             }
-            echo 'DOCUMENT_SCHEMA_READ_ONLY_'.($allReady ? 'READY' : 'MISSING').' companies='.count($companies)."\n";
-            $resultCode = $allReady ? 0 : 2;
+            echo json_encode(['active_tenants'=>count($companies), 'unready_tenants'=>$unready,
+                'missing_migration_checks'=>$missingMigrationChecks, 'missing_column_checks'=>$missingColumnChecks],
+                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
+            echo 'DOCUMENT_SCHEMA_READ_ONLY_'.($unready === 0 ? 'READY' : 'MISSING').' companies='.count($companies)."\n";
+            $resultCode = $unready === 0 ? 0 : 2;
         } finally {
             $central->rollBack();
         }
