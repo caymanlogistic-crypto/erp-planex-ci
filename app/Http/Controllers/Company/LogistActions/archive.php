@@ -19,19 +19,6 @@ try {
         exit;
     }
 
-    $dbIdentifier = $company['db_identifier'];
-
-    try {
-        $tempPdo = new PDO(
-            sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['database']['host'] ?? '127.0.0.1', $config['database']['port'] ?? '3306'),
-            $config['database']['username'] ?? 'root',
-            $config['database']['password'] ?? ''
-        );
-        $tempPdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbIdentifier}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-    } catch (\Exception $e) {
-    }
-    $tempPdo = null;
-
     $localDbConfig = companyDatabaseConfig($config, $company);
     $localDb = new \App\Core\Database($localDbConfig);
     $localPdo = $localDb->connection();
@@ -40,8 +27,7 @@ try {
     try {
         $localPdo->query("SELECT 1 FROM users LIMIT 1")->fetch();
     } catch (\Exception $e) {
-        $migrationSql = file_get_contents(base_path('database/migrations-local/001_create_company_users.sql'));
-        $localPdo->exec($migrationSql);
+        throw new \RuntimeException('Данные компании не подготовлены. Обратитесь к администратору.', 0, $e);
     }
 
     $userStmt = $localPdo->prepare('SELECT * FROM users WHERE id = ?');
