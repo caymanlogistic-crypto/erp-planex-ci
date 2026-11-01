@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 $files = [
-    'database/migrations-local/029_create_crew_drivers.sql',
+    'database/migrations-local/057_create_crew_drivers.sql',
     'scripts/p27_migrate_crew_drivers.php',
+    'scripts/p40_reconcile_migration_names.php',
     'app/Support/crew_driver_helpers.php',
     'app/Http/Controllers/Company/RouteExecutorActions/create_submit.php',
     'app/View/partials/company_route_executor_create_form.php',
@@ -19,9 +20,14 @@ foreach ($files as $file) {
         if ($code !== 0) { fwrite(STDERR, "PHP lint failed: $file\n"); exit(1); }
     }
 }
-$migration = file_get_contents($root.'/database/migrations-local/029_create_crew_drivers.sql');
+$migration = file_get_contents($root.'/database/migrations-local/057_create_crew_drivers.sql');
 foreach (['CREATE TABLE IF NOT EXISTS `crew_drivers`','UNIQUE KEY `uq_crew_driver`','UNIQUE KEY `uq_crew_position`','INSERT IGNORE INTO `crew_drivers`'] as $needle) {
     if (!str_contains($migration,$needle)) { fwrite(STDERR, "Migration missing: $needle\n"); exit(1); }
+}
+// 029 is the historical journal alias; P40 renamed the canonical file to 057.
+$reconcile = file_get_contents($root.'/scripts/p40_reconcile_migration_names.php');
+if (!str_contains($reconcile, "'029_create_crew_drivers.sql' => '057_create_crew_drivers.sql'")) {
+    fwrite(STDERR, "P27 historical migration alias missing\n"); exit(1);
 }
 $form = file_get_contents($root.'/app/View/partials/company_route_executor_create_form.php');
 foreach (['name="driver_ids[]"','+ Добавить водителя','data-crew-driver-row'] as $needle) {
