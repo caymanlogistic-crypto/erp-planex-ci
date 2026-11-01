@@ -17,18 +17,9 @@ if (!function_exists('legalEntityDocumentMaxFileSize')) {
 if (!function_exists('ensureLegalEntityDocumentTables')) {
     function ensureLegalEntityDocumentTables(PDO $pdo): void
     {
-        try {
-            $pdo->query('SELECT 1 FROM documents LIMIT 1')->fetch();
-        } catch (\Exception $e) {
-            $pdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql')));
-        }
-
-        try {
-            $pdo->query('SELECT 1 FROM document_types LIMIT 1')->fetch();
-        } catch (\Exception $e) {
-            $pdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));
-            $pdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));
-        }
+        // Numbered local migrations own the schema. A request may only check it.
+        $pdo->query('SELECT id, document_type_id, created_by_user_id, created_by_role FROM documents LIMIT 0');
+        $pdo->query('SELECT id, name, code, entity_type, sort_order FROM document_types LIMIT 0');
 
         $insert = $pdo->prepare(
             'INSERT IGNORE INTO document_types (name, code, entity_type, category, sort_order) VALUES (?, ?, ?, ?, ?)'
