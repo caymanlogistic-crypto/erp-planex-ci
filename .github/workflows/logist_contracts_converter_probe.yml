@@ -30,6 +30,17 @@ jobs:
           mkdir -p "$RUNNER_TEMP/lo-pkg" "$RUNNER_TEMP/lo-root"
           tar -xzf "$RUNNER_TEMP/lo.tar.gz" -C "$RUNNER_TEMP/lo-pkg"
           while IFS= read -r -d '' deb; do dpkg-deb -x "$deb" "$RUNNER_TEMP/lo-root"; done < <(find "$RUNNER_TEMP/lo-pkg" -name '*.deb' -print0)
+          mkdir -p "$RUNNER_TEMP/lo-deps"
+          while read -r digest relative; do
+            package="$RUNNER_TEMP/lo-deps/$(basename "$relative")"
+            curl -fL --retry 3 --connect-timeout 20 --max-time 120 -o "$package" "https://archive.debian.org/debian/$relative"
+            echo "$digest  $package" | sha256sum -c -
+            dpkg-deb -x "$package" "$RUNNER_TEMP/lo-root"
+          done <<'PACKAGES'
+          de3c486b8b9f837bac9a6cc8edf936a3623ffd2bf571ca9856421615591f84f1 pool/main/c/cups/libcups2_1.7.5-11+deb8u2_amd64.deb
+          5902cf8264fe4630832bf88704fadf9f48c57cc64a3aee8db03aa123d89492ca pool/main/d/dbus/libdbus-1-3_1.8.22-0+deb8u1_amd64.deb
+          3668c1178ac649879338192759e79879e0f5797764b448dcac6aed4b24ef495b pool/main/libx/libxinerama/libxinerama1_1.1.3-1+b1_amd64.deb
+          PACKAGES
           test -x "$RUNNER_TEMP/lo-root/opt/libreoffice7.1/program/soffice"
           "$RUNNER_TEMP/lo-root/opt/libreoffice7.1/program/soffice" --version
           python3 - <<'PY'
@@ -39,7 +50,7 @@ jobs:
           with open(os.environ['RUNNER_TEMP']+'/sample.docx','wb') as out:
               for part in parts: out.write(base64.b64decode(b''.join(open(part,'rb').read().split()),validate=True))
           PY
-          tar -C "$RUNNER_TEMP/lo-root" -czf "$RUNNER_TEMP/converter-probe.tar.gz" opt/libreoffice7.1
+          tar -C "$RUNNER_TEMP/lo-root" -czf "$RUNNER_TEMP/converter-probe.tar.gz" opt/libreoffice7.1 usr/lib/x86_64-linux-gnu
       - name: Configure isolated SSH credentials
         shell: bash
         env:
@@ -76,6 +87,7 @@ jobs:
           tar -xzf "$PROBE/converter-probe.tar.gz" -C "$PROBE"
           echo 'PROBE_STAGE=remote-extracted'
           binary="$PROBE/opt/libreoffice7.1/program/soffice"
+          export LD_LIBRARY_PATH="$PROBE/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           ls -ld "$PROBE" "$PROBE/opt/libreoffice7.1/program" "$binary"
           readlink -f "$binary" || true
           test -x "$binary"
