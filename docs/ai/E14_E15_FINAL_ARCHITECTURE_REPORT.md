@@ -1,5 +1,8 @@
 # E14-E15 Final Architecture Review Report
 
+> Архивный отчёт от 28.06.2026. Описывает состояние на дату проверки и не служит действующей инструкцией или источником учётных данных.
+
+
 ## Status: E14_E15_FINAL_ARCHITECTURE_ACCEPTED
 
 **Date**: 2026-06-28
@@ -121,7 +124,7 @@ These are NOT errors — they are working code. Future refactoring should:
 | Vehicle Sets | 200 OK |
 | Route Executors | 200 OK |
 
-### Logist (logist_runtime_1 / pass1111)
+### Logist (logist_runtime_1 / [удалено])
 | Check | Result |
 |-------|--------|
 | Dashboard | 200 OK |
