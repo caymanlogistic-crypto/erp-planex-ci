@@ -15,6 +15,7 @@ on:
           - logists
           - clients
           - transport
+          - driver-create
           - linear
 
 permissions:
@@ -49,7 +50,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin "refs/heads/$CANONICAL_BRANCH" | awk '{print $1}')" = "$SOURCE_SHA"
           [[ "$EXPECTED_LIVE" =~ ^[a-f0-9]{40}$ ]]
-          [[ "$SCHEMA_SCOPE" =~ ^(logists|clients|transport|linear)$ ]]
+          [[ "$SCHEMA_SCOPE" =~ ^(logists|clients|transport|driver-create|linear)$ ]]
           php -l scripts/legacy_http_schema_readiness_probe.php
       - name: Configure pinned SSH transport
         env:
