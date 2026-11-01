@@ -11,6 +11,10 @@ $connection = [
     'username'=>(string)getenv('PLANEX_SCHEMA_DB_USER'),
     'password'=>(string)getenv('PLANEX_SCHEMA_DB_PASSWORD'),
 ];
+if (getenv('PLANEX_TEST_LEGACY_USER')) {
+    $connection['username'] = (string)getenv('PLANEX_TEST_LEGACY_USER');
+    $connection['password'] = (string)getenv('PLANEX_TEST_LEGACY_PASSWORD');
+}
 putenv('PLANEX_TEST_PLACEMENT_LEGACY_XA=1');
 putenv('FEO_LEGACY_SYNC_CONNECTION_B64=' . base64_encode(json_encode($connection, JSON_THROW_ON_ERROR)));
 putenv('FEO_LEGACY_SYNC_JOURNAL_DIR=' . $journal);
