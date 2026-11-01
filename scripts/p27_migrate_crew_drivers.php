@@ -13,7 +13,7 @@ $config = require dirname(__DIR__) . '/bootstrap/app.php';
 $apply = in_array('--apply', $argv, true);
 $sql = file_get_contents(dirname(__DIR__) . '/database/migrations-local/057_create_crew_drivers.sql');
 if ($sql === false) {
-    throw new RuntimeException('Migration 029 not found.');
+    throw new RuntimeException('Migration 057 not found.');
 }
 
 $central = new App\Core\Database($config['database']);
