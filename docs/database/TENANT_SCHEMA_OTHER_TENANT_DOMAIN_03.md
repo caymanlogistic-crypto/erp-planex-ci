@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `dc181daddd43c45a02a9c0ae080db7163780e4bad54d6fc805222d2db1a1b57a`
+**Schema fingerprint:** `9ebbb42ee7f9a17f3a6c94a390435863424b3b6f40f818fe72719a6cefd32d28`
 
 ## `feo_utilizers`
 
@@ -111,6 +111,50 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `logist_contracts`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `business_id` | `int unsigned` | NO | NULL | — | — |
+| `contract_type` | `enum('lease','sublease')` | NO | NULL | — | — |
+| `version_no` | `int unsigned` | NO | NULL | — | — |
+| `template_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `template_version_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `route_executor_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `snapshot_json` | `longtext` | NO | NULL | — | — |
+| `pdf_path` | `varchar(1000)` | NO | NULL | — | — |
+| `pdf_name` | `varchar(255)` | NO | NULL | — | — |
+| `pdf_sha256` | `char(64)` | NO | NULL | — | — |
+| `status` | `enum('pending','approved','rejected')` | NO | `pending` | — | `MUL` |
+| `review_reason` | `varchar(1000)` | YES | NULL | — | — |
+| `reviewed_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `reviewed_at` | `datetime` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `fk_logist_contract_executor` (`route_executor_id`)
+- **INDEX** `fk_logist_contract_template` (`template_id`)
+- **INDEX** `fk_logist_contract_template_version` (`template_version_id`)
+- **INDEX** `idx_logist_contract_creator` (`created_by_user_id`, `id`)
+- **INDEX** `idx_logist_contract_status` (`status`, `id`)
+- **INDEX** `idx_logist_contract_trip` (`trip_id`, `id`)
+- **UNIQUE** `uk_logist_contract_version` (`trip_id`, `contract_type`, `version_no`)
+
+### Physical foreign keys
+
+- `fk_logist_contract_executor`: (`route_executor_id`) → `crews`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+- `fk_logist_contract_template`: (`template_id`) → `document_templates`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+- `fk_logist_contract_template_version`: (`template_version_id`) → `document_template_versions`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+- `fk_logist_contract_trip`: (`trip_id`) → `waste_trips`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
 
 ## `max_bots`
 
@@ -231,37 +275,3 @@
 ### Physical foreign keys
 
 - `fk_max_event_rule_chat`: (`chat_config_id`) → `max_chats`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
-
-## `max_message_logs`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `bot_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
-| `chat_config_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
-| `external_chat_id` | `varchar(32)` | YES | NULL | — | — |
-| `source` | `enum('test','manual','event')` | NO | NULL | — | — |
-| `message_text` | `text` | NO | NULL | — | — |
-| `message_format` | `enum('plain','markdown','html')` | NO | `plain` | — | — |
-| `notify` | `tinyint(1)` | NO | `1` | — | — |
-| `status` | `enum('sent','failed')` | NO | NULL | — | `MUL` |
-| `max_message_id` | `varchar(128)` | YES | NULL | — | — |
-| `error_message` | `varchar(2000)` | YES | NULL | — | — |
-| `initiated_by_user_id` | `bigint unsigned` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | `MUL` |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `fk_max_message_logs_bot` (`bot_id`)
-- **INDEX** `fk_max_message_logs_chat` (`chat_config_id`)
-- **INDEX** `idx_max_message_logs_created` (`created_at`, `id`)
-- **INDEX** `idx_max_message_logs_status` (`status`, `created_at`)
-
-### Physical foreign keys
-
-- `fk_max_message_logs_bot`: (`bot_id`) → `max_bots`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
-- `fk_max_message_logs_chat`: (`chat_config_id`) → `max_chats`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
