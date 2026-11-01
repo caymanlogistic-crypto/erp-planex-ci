@@ -43,6 +43,9 @@ jobs:
           cd0bf1b525606f38de14b50f88b841177b967273015968a13aa3d848d69729aa pool/main/a/avahi/libavahi-client3_0.6.31-5_amd64.deb
           83bc43e646989a3f39684cf331b8fc15b009f54b88eeeb9c0851c20f4cc25310 pool/main/a/avahi/libavahi-common3_0.6.31-5_amd64.deb
           a5685d0dc8bcf06a9e858bb8c8d9e9edf4376729dcabb9557e13fdac365e8a3c pool/main/g/gnutls28/libgnutls-deb0-28_3.3.8-6+deb8u7_amd64.deb
+          9b95be6e2db3bbb912fcb7fa4bb306e2f6abb029d26c7ea63e942380a3535763 pool/main/n/nettle/libhogweed2_2.7.1-5+deb8u2_amd64.deb
+          6917d0fd576ec89004eef355a5700eeb51fc35678e660797621af2a8f483fcf0 pool/main/n/nettle/libnettle4_2.7.1-5+deb8u2_amd64.deb
+          50be06cb69c72cbedf6942c8b8929400ceb6e7a198c52b16698aace41e411d40 pool/main/p/p11-kit/libp11-kit0_0.20.7-1_amd64.deb
           PACKAGES
           test -x "$RUNNER_TEMP/lo-root/opt/libreoffice7.1/program/soffice"
           "$RUNNER_TEMP/lo-root/opt/libreoffice7.1/program/soffice" --version
