@@ -6,7 +6,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './helpers/registry_behavior_contract.mjs';
-import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataContract,assertRegistryTableState} from './helpers/registry_visual_contract.mjs';
 
 const require=createRequire(import.meta.url), {chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -25,7 +25,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_BINARY?{executablePath:process.env.PLANEX_BROWSER_BINARY}:{})});
 const origin=`http://127.0.0.1:${server.address().port}`;
 try{
-  for(const role of ['logist','owner']) for(const width of [1280,1920,390]){
+  for(const role of ['logist','owner']) for(const width of [1280,1920,390,3840]){
     const page=await browser.newPage({viewport:{width,height:900}}), errors=[];
     page.on('pageerror',error=>errors.push(error.message));
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
@@ -34,6 +34,7 @@ try{
     await page.waitForSelector('[data-registry-ready="true"]');
     await assertRegistryVisualContract(page,`logist-contracts ${role} ${width}`);
     await assertRegistryDataContract(page,'logist-contracts');
+    if(role==='logist') await assertRegistryTableState(page,'logist-contracts','initial',{runtime:true});
     const rows=[
       {id:2,cells:[['#463','Версия 2','На согласовании'],['Вывоз отходов: Кемерово — Воск…','Аренда'],['03.11.2026'],['ООО «СибТранс»'],['Орлов Алексей Петрович'],['185000 ₽'],['Без НДС'],...(role==='owner'?[['Карина Г.']]:[])]},
       {id:1,cells:[['#459','Версия 1','Согласован'],['Сборный рейс: Томск — Новосиби…','Аренда'],['29.10.2026'],['ИП Кузнецов'],['Кузнецов Павел Андреевич'],['92000 ₽'],['Без НДС'],...(role==='owner'?[['Карина Г.']]:[])]},
@@ -65,5 +66,6 @@ try{
   await scrollPage.waitForSelector('[data-registry-ready="true"]');
   await assertRegistryScroll(scrollPage,'logist-contracts populated scroll');
   await scrollPage.close();
+  console.log('REGISTRY_RUNTIME_PAGE=logist-contracts');
   console.log('LOGIST_CONTRACTS_BROWSER=PASS');
 }finally{await browser.close();server.close();}
