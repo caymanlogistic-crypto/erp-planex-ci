@@ -22,6 +22,7 @@ $schema = (string)getenv('PLANEX_TEST_FIXED_DB');
 check($schema !== '' && in_array($schema, explode(',', (string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')), true), 'disposable schema required');
 $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1', getenv('PLANEX_SCHEMA_DB_PORT') ?: '33316', $schema);
 $pdo = new PDO($dsn, (string)getenv('PLANEX_SCHEMA_DB_USER'), (string)getenv('PLANEX_SCHEMA_DB_PASSWORD'), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+cleanCompanyPoolDatabase($pdo);
 \App\Service\LocalMigrationService::apply($pdo);
 check(\App\Service\LogistContractService::schemaReady($pdo), 'migration 164 missing');
 
