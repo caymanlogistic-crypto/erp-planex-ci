@@ -13,8 +13,8 @@ try{$pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id
 if(!$company||$company['status']!=='active'){header('Location: /company/documents?entity_type='.urlencode($entityType).'&entity_id='.$entityId.'&error=company_inactive');exit;}
 $cfg=companyDatabaseConfig($config, $company);$ldb=new \App\Core\Database($cfg);$lpdo=$ldb->connection();applyLocalMigrations($lpdo);
 if(!canAccessDocumentEntity($lpdo,$entityType,$entityId)){denyEntityAccess();return;}
-try{$lpdo->query("SELECT 1 FROM documents LIMIT 1")->fetch();}catch(\Exception$e){$lpdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql')));}
-try{$lpdo->query("SELECT 1 FROM document_types LIMIT 1")->fetch();}catch(\Exception$e){$lpdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));$lpdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));}
+$lpdo->query('SELECT created_by_user_id, created_by_role FROM documents LIMIT 0');
+$lpdo->query('SELECT id FROM document_types LIMIT 0');
 $storedName=uniqid('doc_',true).'.'.$ext;$relativeDir='companies/'.$companyId.'/documents/'.$entityType.'/'.$entityId;$absoluteDir=storage_path($relativeDir);
 if(!is_dir($absoluteDir))mkdir($absoluteDir,0755,true);
 if(!move_uploaded_file($_FILES['doc_file']['tmp_name'],$absoluteDir.DIRECTORY_SEPARATOR.$storedName)){header('Location: /company/documents?entity_type='.urlencode($entityType).'&entity_id='.$entityId.'&error=save_failed');exit;}
