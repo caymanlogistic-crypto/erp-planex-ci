@@ -32,6 +32,9 @@ try{
     await page.route('**/company/logistics/contracts/2',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,row:{...JSON.parse(html.logist.match(/<script type="application\/json" data-initial-rows>(.*?)<\/script>/s)[1])[0],id:2,contract_type:'lease',version_no:2,review_reason:null,logist_name:'Карина Г.',snapshot:{trip:{comment:'Вывоз отходов: Кемерово — Воскресенск'},executor:{name:'ООО «СибТранс»'},driver:{full_name:'Орлов Алексей Петрович'},parameters:{start_date:'2026-11-03',finish_date:'2026-11-10',price:'185000',vat_mode:'Без НДС'},vehicle:{model:'А123ВС77',plate:'А123ВС77'},requests:[{zayavka_id:'312015'}]}},versions:[{id:1,version_no:1,status:'rejected',review_reason:'Уточнить ставку'}]})}));
     await page.goto(`${origin}/company/logistics/contracts?role=${role}`);
     await page.waitForSelector('[data-registry-ready="true"]');
+    for(const selector of ['[data-page-error]','[data-form-error]','[data-detail-error]']){
+      assert.equal(await page.locator(selector).isVisible(),false,`hidden alert is visible ${role} ${width} ${selector}`);
+    }
     await assertRegistryVisualContract(page,`logist-contracts ${role} ${width}`);
     await assertRegistryDataContract(page,'logist-contracts');
     if(role==='logist') await assertRegistryTableState(page,'logist-contracts','initial',{runtime:true});
