@@ -8,9 +8,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "a1ad8c3ff9204324d058b00d76ae3710dcded956",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/a1ad8c3ff9204324d058b00d76ae3710dcded956/tests/agent_deploy_policy_contract_test.py",
-      "verification_note": "2026-11-02: Controlled deploy gained a read-only predeploy check for LibreOffice and PHP PDF capabilities, scoped to the new logistics contract service. Agent deploy policy, request contract and web runtime diagnostic contract passed locally on the implementation SHA. No deployment was invoked by this verification.",
+      "verified_sha": "20444c22e9ee947e9a05e18518ad4ded409712df",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/20444c22e9ee947e9a05e18518ad4ded409712df/tests/agent_deploy_policy_contract_test.py",
+      "verification_note": "2026-11-02: Controlled deploy checks the isolated LibreOffice 7.1.8.1 runtime and PHP PDF capabilities before replacing ERP. The pinned-archive provision workflow smoke-tests DOCX to PDF before activation. Agent deploy policy, request contract and web runtime diagnostic contract passed locally on this SHA; production provision and deployment are pending. The separate P07 engine contract currently fails in the Windows local tar fixture before exercising deploy logic and is not evidence for this change.",
       "owning_paths": [
         ".github/workflows/erpv2_agent_deploy_request.yml",
         ".github/workflows/erpv2_controlled_deploy.yml",

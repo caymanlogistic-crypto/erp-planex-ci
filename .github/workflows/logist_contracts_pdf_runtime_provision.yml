@@ -1,0 +1,144 @@
+name: Logist Contracts PDF Runtime Provision
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact canonical SHA for the logistics contracts runtime
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  SERVER_ROOT: /home/s/spugovxsim/planexp
+  ARCHIVE_URL: https://downloadarchive.documentfoundation.org/libreoffice/old/7.1.8.1/deb/x86_64/LibreOffice_7.1.8.1_Linux_x86-64_deb.tar.gz
+  ARCHIVE_SHA256: 4468b0f4edd40e74c086c7d264475136fabc0760ee702cf8ea1662a4ca94201d
+
+jobs:
+  provision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Verify exact canonical and successful CI
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > "$RUNNER_TEMP/ci.json"
+          SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import json,os
+          rows=[r for r in json.load(open(os.environ['RUNNER_TEMP']+'/ci.json')).get('workflow_runs',[])
+                if r.get('head_sha')==os.environ['SOURCE_SHA'] and r.get('event')=='push']
+          if not rows or max(rows,key=lambda r:r.get('run_number',0)).get('conclusion')!='success':
+              raise SystemExit('Exact canonical CI is not green')
+          PY
+      - name: Build private converter bundle from pinned archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 20 --max-time 600 -o "$RUNNER_TEMP/lo.tar.gz" "$ARCHIVE_URL"
+          echo "$ARCHIVE_SHA256  $RUNNER_TEMP/lo.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/lo-pkg" "$RUNNER_TEMP/lo-root" "$RUNNER_TEMP/lo-deps"
+          tar -xzf "$RUNNER_TEMP/lo.tar.gz" -C "$RUNNER_TEMP/lo-pkg"
+          while IFS= read -r -d '' deb; do dpkg-deb -x "$deb" "$RUNNER_TEMP/lo-root"; done < <(find "$RUNNER_TEMP/lo-pkg" -name '*.deb' -print0)
+          while read -r digest relative; do
+            package="$RUNNER_TEMP/lo-deps/$(basename "$relative")"
+            curl -fL --retry 3 --connect-timeout 20 --max-time 120 -o "$package" "https://archive.debian.org/debian/$relative"
+            echo "$digest  $package" | sha256sum -c -
+            dpkg-deb -x "$package" "$RUNNER_TEMP/lo-root"
+          done <<'PACKAGES'
+          de3c486b8b9f837bac9a6cc8edf936a3623ffd2bf571ca9856421615591f84f1 pool/main/c/cups/libcups2_1.7.5-11+deb8u2_amd64.deb
+          5902cf8264fe4630832bf88704fadf9f48c57cc64a3aee8db03aa123d89492ca pool/main/d/dbus/libdbus-1-3_1.8.22-0+deb8u1_amd64.deb
+          3668c1178ac649879338192759e79879e0f5797764b448dcac6aed4b24ef495b pool/main/libx/libxinerama/libxinerama1_1.1.3-1+b1_amd64.deb
+          cd0bf1b525606f38de14b50f88b841177b967273015968a13aa3d848d69729aa pool/main/a/avahi/libavahi-client3_0.6.31-5_amd64.deb
+          83bc43e646989a3f39684cf331b8fc15b009f54b88eeeb9c0851c20f4cc25310 pool/main/a/avahi/libavahi-common3_0.6.31-5_amd64.deb
+          a5685d0dc8bcf06a9e858bb8c8d9e9edf4376729dcabb9557e13fdac365e8a3c pool/main/g/gnutls28/libgnutls-deb0-28_3.3.8-6+deb8u7_amd64.deb
+          9b95be6e2db3bbb912fcb7fa4bb306e2f6abb029d26c7ea63e942380a3535763 pool/main/n/nettle/libhogweed2_2.7.1-5+deb8u2_amd64.deb
+          6917d0fd576ec89004eef355a5700eeb51fc35678e660797621af2a8f483fcf0 pool/main/n/nettle/libnettle4_2.7.1-5+deb8u2_amd64.deb
+          50be06cb69c72cbedf6942c8b8929400ceb6e7a198c52b16698aace41e411d40 pool/main/p/p11-kit/libp11-kit0_0.20.7-1_amd64.deb
+          PACKAGES
+          test -x "$RUNNER_TEMP/lo-root/opt/libreoffice7.1/program/soffice"
+          python3 - <<'PY'
+          import base64,glob,os
+          parts=sorted(glob.glob('resources/document-templates/contract_vehicle_lease_crew_v9.docx.b64.part*'))
+          if len(parts)<2: raise SystemExit('Built-in contract parts missing')
+          with open(os.environ['RUNNER_TEMP']+'/sample.docx','wb') as out:
+              for part in parts: out.write(base64.b64decode(b''.join(open(part,'rb').read().split()),validate=True))
+          PY
+          tar -C "$RUNNER_TEMP/lo-root" -czf "$RUNNER_TEMP/converter.tar.gz" opt/libreoffice7.1 usr/lib/x86_64-linux-gnu lib/x86_64-linux-gnu
+          sha256sum "$RUNNER_TEMP/converter.tar.gz"
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/logist_runtime_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/logist_runtime_key" "$HOME/.ssh/known_hosts"
+      - name: Stage, smoke test and atomically activate private runtime
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          stage="$SERVER_ROOT/deploy/logist_pdf_runtime_stage_${GITHUB_RUN_ID}"
+          target="$SERVER_ROOT/deploy/logist_contracts_pdf_runtime_7_1_8_1"
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_runtime_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/logist_runtime_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          "${SSH[@]}" "mkdir -m 700 '$stage'"
+          cleanup() { "${SSH[@]}" "case '$stage' in '$SERVER_ROOT'/deploy/logist_pdf_runtime_stage_[0-9]*) rm -rf -- '$stage' ;; *) exit 1 ;; esac" || true; }
+          trap cleanup EXIT
+          "${SCP[@]}" "$RUNNER_TEMP/converter.tar.gz" "$RUNNER_TEMP/sample.docx" "$SSH_USER@$SSH_HOST:$stage/"
+          "${SSH[@]}" "STAGE='$stage' TARGET='$target' bash -se" <<'REMOTE'
+          set -euo pipefail
+          case "$STAGE" in /home/s/spugovxsim/planexp/deploy/logist_pdf_runtime_stage_[0-9]*) ;; *) exit 1 ;; esac
+          test "$TARGET" = '/home/s/spugovxsim/planexp/deploy/logist_contracts_pdf_runtime_7_1_8_1'
+          tar -xzf "$STAGE/converter.tar.gz" -C "$STAGE"
+          binary="$STAGE/opt/libreoffice7.1/program/soffice"
+          export LD_LIBRARY_PATH="$STAGE/lib/x86_64-linux-gnu:$STAGE/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          test -x "$binary"
+          "$binary" --version | grep -F 'LibreOffice 7.1.8.1'
+          mkdir -m 700 "$STAGE/home"
+          HOME="$STAGE/home" timeout 120 "$binary" "-env:UserInstallation=file://$STAGE/profile" --headless --convert-to pdf:writer_pdf_Export --outdir "$STAGE" "$STAGE/sample.docx"
+          test -s "$STAGE/sample.pdf"
+          test "$(head -c 5 "$STAGE/sample.pdf")" = '%PDF-'
+          printf 'PRIVATE_CONVERTER_SMOKE=PASS pdf_bytes=%s\n' "$(stat -c %s "$STAGE/sample.pdf")"
+          rm -rf -- "$STAGE/home" "$STAGE/profile"
+          rm -f -- "$STAGE/sample.docx" "$STAGE/sample.pdf" "$STAGE/converter.tar.gz"
+          if test -e "$TARGET"; then
+            test -x "$TARGET/opt/libreoffice7.1/program/soffice"
+            test "$(sha256sum "$TARGET/opt/libreoffice7.1/program/soffice.bin" | awk '{print $1}')" = "$(sha256sum "$STAGE/opt/libreoffice7.1/program/soffice.bin" | awk '{print $1}')"
+            echo 'PRIVATE_CONVERTER_ALREADY_PROVISIONED=YES'
+          else
+            mv -- "$STAGE" "$TARGET"
+            echo 'PRIVATE_CONVERTER_ACTIVATED=YES'
+          fi
+          REMOTE
+      - name: Remove task key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/logist_runtime_key"

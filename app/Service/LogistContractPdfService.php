@@ -98,11 +98,21 @@ final class LogistContractPdfService
     private static function convert(string $docx, string $outputDir): void
     {
         $binary = trim((string)(getenv('PLANEX_LIBREOFFICE_BIN') ?: ''));
-        if ($binary === '') $binary = PHP_OS_FAMILY === 'Windows' ? 'E:\\Applications\\LibreOffice\\program\\soffice.com' : 'libreoffice';
+        $privateRuntime = PHP_OS_FAMILY === 'Windows' ? null : dirname(base_path(), 2) . '/deploy/logist_contracts_pdf_runtime_7_1_8_1';
+        if ($binary === '') $binary = PHP_OS_FAMILY === 'Windows'
+            ? 'E:\\Applications\\LibreOffice\\program\\soffice.com'
+            : $privateRuntime . '/opt/libreoffice7.1/program/soffice';
+        if (!is_file($binary) || !is_executable($binary)) throw new RuntimeException('На сервере недоступна конвертация DOCX в PDF.');
         $profile = $outputDir . DIRECTORY_SEPARATOR . 'lo-profile';
         $profileUri = 'file:///' . str_replace('\\', '/', ltrim($profile, '/'));
         $command = [$binary, '-env:UserInstallation=' . $profileUri, '--headless', '--convert-to', 'pdf:writer_pdf_Export', '--outdir', $outputDir, $docx];
-        $process = @proc_open($command, [0 => ['pipe','r'], 1 => ['pipe','w'], 2 => ['pipe','w']], $pipes);
+        $environment = null;
+        if ($privateRuntime !== null && str_starts_with($binary, $privateRuntime . '/')) {
+            $environment = getenv();
+            $environment['LD_LIBRARY_PATH'] = $privateRuntime . '/lib/x86_64-linux-gnu:' . $privateRuntime . '/usr/lib/x86_64-linux-gnu'
+                . (isset($environment['LD_LIBRARY_PATH']) && $environment['LD_LIBRARY_PATH'] !== '' ? ':' . $environment['LD_LIBRARY_PATH'] : '');
+        }
+        $process = @proc_open($command, [0 => ['pipe','r'], 1 => ['pipe','w'], 2 => ['pipe','w']], $pipes, null, $environment);
         if (!is_resource($process)) throw new RuntimeException('На сервере недоступна конвертация DOCX в PDF.');
         fclose($pipes[0]);
         $stdout = stream_get_contents($pipes[1]); fclose($pipes[1]);
