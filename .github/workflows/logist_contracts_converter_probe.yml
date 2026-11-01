@@ -60,21 +60,31 @@ jobs:
           set -euo pipefail
           probe="/tmp/logist_pdf_probe_${GITHUB_RUN_ID}"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "mkdir -m 700 '$probe'"
+          echo 'PROBE_STAGE=remote-dir-created'
           cleanup() {
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "case '$probe' in /tmp/logist_pdf_probe_[0-9]*) rm -rf -- '$probe' ;; *) exit 1 ;; esac" || true
           }
           trap cleanup EXIT
           scp -P "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$RUNNER_TEMP/converter-probe.tar.gz" "$RUNNER_TEMP/sample.docx" "$SSH_USER@$SSH_HOST:$probe/"
+          echo 'PROBE_STAGE=uploaded'
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PROBE='$probe' bash -se" <<'REMOTE'
           set -euo pipefail
+          echo 'PROBE_STAGE=remote-start'
           test "$PROBE" = "/tmp/logist_pdf_probe_${PROBE##*_}"
           tar -xzf "$PROBE/converter-probe.tar.gz" -C "$PROBE"
+          echo 'PROBE_STAGE=remote-extracted'
           binary="$PROBE/opt/libreoffice7.1/program/soffice"
           test -x "$binary"
-          "$binary" --version
+          echo 'PROBE_STAGE=binary-executable'
+          if ! "$binary" --version; then
+            ldd "$PROBE/opt/libreoffice7.1/program/soffice.bin" || true
+            exit 1
+          fi
+          echo 'PROBE_STAGE=version-passed'
           mkdir -m 700 "$PROBE/home"
           HOME="$PROBE/home" timeout 120 "$binary" "-env:UserInstallation=file://$PROBE/profile" --headless --convert-to pdf:writer_pdf_Export --outdir "$PROBE" "$PROBE/sample.docx"
+          echo 'PROBE_STAGE=converted'
           test -s "$PROBE/sample.pdf"
           test "$(head -c 5 "$PROBE/sample.pdf")" = '%PDF-'
           printf 'LOGIST_CONVERTER_TEMP_PROBE=PASS pdf_bytes=%s\n' "$(stat -c %s "$PROBE/sample.pdf")"
