@@ -23,14 +23,17 @@ $legacyDatabase = trim((string)getenv('PLANEX_TEST_LEGACY_DB')) ?: $database;
 if (!preg_match('/^[a-zA-Z0-9_]+$/D', $legacyDatabase) || !in_array($legacyDatabase, $allowed, true)) {
     throw new RuntimeException('Guarded legacy test database is required.');
 }
-if ($legacyDatabase !== $database && trim((string)getenv('PLANEX_TEST_LEGACY_USER')) === '') {
-    throw new RuntimeException('A separate legacy account is required for the two-schema fixture.');
+if ($legacyDatabase !== $database && (
+    trim((string)getenv('PLANEX_TEST_LEGACY_USER')) === ''
+    || trim((string)getenv('PLANEX_TEST_LEGACY_PASSWORD')) === ''
+)) {
+    throw new RuntimeException('Separate legacy credentials are required for the two-schema fixture.');
 }
 $legacyPdo = $legacyDatabase === $database ? $pdo : new PDO(
     'mysql:host=' . getenv('PLANEX_SCHEMA_DB_HOST') . ';port=' . (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306)
     . ';dbname=' . $legacyDatabase . ';charset=utf8mb4',
-    getenv('PLANEX_TEST_LEGACY_USER') ?: getenv('PLANEX_SCHEMA_DB_USER'),
-    getenv('PLANEX_TEST_LEGACY_PASSWORD') ?: getenv('PLANEX_SCHEMA_DB_PASSWORD'),
+    getenv('PLANEX_TEST_LEGACY_USER'),
+    getenv('PLANEX_TEST_LEGACY_PASSWORD'),
     [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]
 );
 $count = 0;
