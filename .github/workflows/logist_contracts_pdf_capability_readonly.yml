@@ -1,0 +1,61 @@
+name: Logist Contracts PDF Capability Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Verify exact canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/logist_pdf_capability_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/logist_pdf_capability_key" "$HOME/.ssh/known_hosts"
+      - name: Inspect PDF executables and PHP functions without writes
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_pdf_capability_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          for binary in libreoffice soffice lowriter; do
+            if command -v "$binary" >/dev/null; then
+              printf 'PDF_BINARY_%s=%s\n' "$binary" "$(command -v "$binary")"
+            else
+              printf 'PDF_BINARY_%s=MISSING\n' "$binary"
+            fi
+          done
+          for binary in /usr/bin/libreoffice /usr/local/bin/libreoffice /opt/libreoffice/program/soffice /usr/bin/soffice; do
+            if test -x "$binary"; then printf 'PDF_PATH_%s=EXECUTABLE\n' "$binary"; fi
+          done
+          /usr/bin/php8.5 -r 'foreach (["proc_open"=>function_exists("proc_open"),"ZipArchive"=>class_exists("ZipArchive"),"DOMDocument"=>class_exists("DOMDocument")] as $name=>$ready) echo "PHP_",$name,"=",($ready?"READY":"MISSING"),PHP_EOL;'
+          REMOTE
+      - name: Remove task key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/logist_pdf_capability_key"
