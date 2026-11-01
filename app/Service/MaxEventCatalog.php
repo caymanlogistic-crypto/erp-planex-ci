@@ -83,6 +83,20 @@ final class MaxEventCatalog
 
     private static function documentEvents(): array
     {
+        $contractCreated = [
+            'logist.contract.created' => [
+                'title' => 'Договор логиста — создан',
+                'description' => 'После создания новой версии договора. Отправка в группу MAX «тестовая».',
+                'template' => "Создан договор логиста\nРейс #{{trip}} · версия {{version}}\n{{contract_type}}\nЛогист: {{logist}}\n{{url}}",
+                'variables' => [
+                    'trip'=>['Номер рейса','463'],
+                    'version'=>['Версия договора','2'],
+                    'contract_type'=>['Вид договора','Аренда'],
+                    'logist'=>['Логист','Карина Г.'],
+                    'url'=>['Ссылка в ERP','https://plan-ex.ru/erpv2/company/document-generator/logist-contracts?open=1'],
+                ],
+            ],
+        ];
         $variables=['trip'=>['Рейс','123'],'loading_dates'=>['Даты загрузки','21–22.09.2026'],
             'responsible'=>['Ответственный логист','Иванов Иван'],'action'=>['Следующее действие','Проверьте ответ перевозчика'],
             'url'=>['Запрос в ERP','https://plan-ex.ru/erpv2/company/documents/collection/123']];
@@ -93,7 +107,7 @@ final class MaxEventCatalog
                 'template'=>$title."\nРейс #{{trip}} · загрузка: {{loading_dates}}\nЛогист: {{responsible}}\n{{action}}\n{{url}}",
                 'variables'=>$variables];
         }
-        return $events;
+        return $events + $contractCreated;
     }
 
     private static function transferEvents(): array

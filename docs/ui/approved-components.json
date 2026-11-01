@@ -325,6 +325,32 @@
   ],
   "pages": [
     {
+      "id": "logist-contracts",
+      "family": "registry",
+      "adaptation_status": "current_20261018",
+      "route": "/erpv2/company/logistics/contracts",
+      "view": "app/View/pages/company_logist_contracts.php",
+      "asset_owner": "app/Http/Controllers/Company/LogistContractController.php",
+      "browser_test": "tests/logist_contracts_browser_test.mjs",
+      "runtime_browser_test": "tests/logist_contracts_browser_test.mjs",
+      "header_icon": {
+        "variant": "outline",
+        "source": "app/View/components/tabler/outline/file-text.svg",
+        "version": "3.48.0",
+        "name": "file-text",
+        "role": "registry.page-head",
+        "pack": "@tabler/icons"
+      },
+      "reference_select": false,
+      "sticky": true,
+      "data_roles": ["primary", "name", "trip", "secondary"],
+      "table_surfaces": [{"id":"main","selector":".registry-ui-card > .table-scroll > table","row_selector":"tbody > tr:not(:has(td[colspan]))"}],
+      "table_states": [{"id":"initial","visible":["main"],"data":{"main":"populated"}}],
+      "async_search": {"applicable": false, "reason": "Поиск фильтрует загруженные договоры локально."},
+      "contract_sources": ["app/View/pages/company_logist_contracts.php", "app/Service/LogistContractService.php", "tests/logist_contracts_browser_test.mjs", "tests/logist_contract_integration_test.php"],
+      "required_contracts": []
+    },
+    {
       "id": "route-executors",
       "family": "registry",
       "route": "/erpv2/company/route-executors",

@@ -47,6 +47,15 @@ final class NavigationCounterService
         $counters = self::emptyCounters();
 
         try {
+            if (!class_exists(LogistContractService::class)) require_once __DIR__.'/LogistContractService.php';
+            if (LogistContractService::schemaReady($tenant)) {
+                $counters['logist_contracts_pending'] = LogistContractService::pendingCount($tenant);
+            }
+        } catch (Throwable) {
+            $counters['logist_contracts_pending'] = 0;
+        }
+
+        try {
             $counters['bank_attention'] = max(0, (int)$tenant->query(
                 "SELECT COUNT(*)
                    FROM bank_transactions
@@ -257,6 +266,7 @@ final class NavigationCounterService
             'cash_attention' => 0,
             'closing_documents_problem' => 0,
             'trip_closing_blocked_unloaded' => 0,
+            'logist_contracts_pending' => 0,
             'linear_trips_problem' => 0,
             'departures_problem' => 0,
             'warehouse_stock_problem' => 0,

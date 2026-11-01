@@ -53,7 +53,7 @@ function routeArgumentCounts(string $source): array
 
 $routePages = [
     'company_bank_finance.php' => ['company.finance.bank_accounts', 'company.finance.bank_settings', 'company.finance.closing_documents'],
-    'company_document_generator.php' => ['company.documents.create', 'company.documents.history', 'company.documents.templates'],
+    'company_document_generator.php' => ['company.documents.create', 'company.documents.history', 'company.documents.templates', 'company.documents.logist_contracts', 'company.logistics.contracts'],
     'company_trip_documents.php' => ['company.documents.request', 'company.documents.collection'],
     'company_trip_completion.php' => ['company.documents.collection', 'company.registration_journal'],
     'company_trip_closing.php' => ['company.documents.trip_closing', 'company.documents.trip_closing_registry'],
@@ -87,7 +87,7 @@ foreach ($routePages as $file => $pageKeys) {
     foreach ($pageKeys as $pageKey) endpointExpect(str_contains($source, $pageKey), "{$file} missing {$pageKey}");
     $declarationCount += count($counts);
 }
-endpointExpect($declarationCount === 256, 'owned inventory must contain exactly 254 protected and two token-gated archive declarations');
+endpointExpect($declarationCount === 263, 'owned inventory must contain exactly 261 protected and two token-gated archive declarations');
 
 $ownedSources = '';
 foreach (array_keys($routePages) as $file) $ownedSources .= file_get_contents($root . '/app/Http/Routes/' . $file);

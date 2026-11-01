@@ -77,7 +77,8 @@ trait DocumentGeneratorTripPackageTrait
         int $templateId,
         int $tripId,
         array $params,
-        ?GoogleSheetsRequestContactService $contactService = null
+        ?GoogleSheetsRequestContactService $contactService = null,
+        ?int $documentExecutorId = null
     ): array {
         try {
             $trip = self::loadDocumentTrip($pdo, $tripId, false);
@@ -87,6 +88,7 @@ trait DocumentGeneratorTripPackageTrait
         $requestIds = self::tripRequestIds($trip);
         if ($requestIds === []) return self::failed(['В выбранном рейсе нет заявок ФЭО.']);
         $crewId = (int)($trip['route_executor_id'] ?? 0);
+        if ($crewId <= 0 && $documentExecutorId !== null) $crewId = $documentExecutorId;
         if ($crewId <= 0) return self::failed(['В выбранном рейсе не назначен Исполнитель рейса.']);
 
         $context = ['trip'=>self::tripSnapshot($trip)];

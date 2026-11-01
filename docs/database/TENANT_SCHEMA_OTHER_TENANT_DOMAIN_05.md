@@ -2,7 +2,43 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `dc181daddd43c45a02a9c0ae080db7163780e4bad54d6fc805222d2db1a1b57a`
+**Schema fingerprint:** `9ebbb42ee7f9a17f3a6c94a390435863424b3b6f40f818fe72719a6cefd32d28`
+
+## `waste_trip_completion_items`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `waste_trip_request_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
+| `arrived_at` | `datetime` | YES | NULL | — | — |
+| `departed_at` | `datetime` | YES | NULL | — | — |
+| `driver_signature_present` | `tinyint(1)` | NO | `0` | — | — |
+| `driver_signature_status` | `varchar(3)` | YES | NULL | — | — |
+| `sender_signature_present` | `tinyint(1)` | NO | `0` | — | — |
+| `sender_signature_status` | `varchar(3)` | YES | NULL | — | — |
+| `tn_datetime_missing` | `tinyint(1)` | NO | `0` | — | — |
+| `tn_datetime_status` | `varchar(7)` | YES | NULL | — | — |
+| `tn_absent` | `tinyint(1)` | NO | `0` | — | — |
+| `data_from_tracker` | `tinyint(1)` | NO | `0` | — | — |
+| `data_from_driver` | `tinyint(1)` | NO | `0` | — | — |
+| `data_invented` | `tinyint(1)` | NO | `0` | — | — |
+| `recovery_source` | `varchar(8)` | YES | NULL | — | — |
+| `comment` | `varchar(500)` | YES | NULL | — | — |
+| `updated_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `lock_version` | `int unsigned` | NO | `1` | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | `MUL` |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`waste_trip_request_id`)
+- **INDEX** `idx_waste_trip_completion_updated` (`updated_at`, `waste_trip_request_id`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_completion_request`: (`waste_trip_request_id`) → `waste_trip_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trip_completion_reviews`
 

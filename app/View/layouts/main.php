@@ -59,6 +59,8 @@ $documentGeneratorCreateActive = $requestPath === '/company/document-generator';
 $documentGeneratorHistoryActive = $requestPath === '/company/document-generator/history';
 $documentGeneratorTemplatesActive = $requestPath === '/company/document-generator/templates'
     || str_starts_with($requestPath, '/company/document-generator/templates/');
+$logistContractsActive = $requestPath === '/company/logistics/contracts';
+$documentGeneratorLogistActive = $requestPath === '/company/document-generator/logist-contracts';
 $contractorsActive = str_starts_with($requestPath, '/company/contractors');
 $driversActive = str_starts_with($requestPath, '/company/drivers');
 $vehicleSetsActive = str_starts_with($requestPath, '/company/vehicle-sets');
@@ -128,13 +130,15 @@ $navigationBadgeHtml = static function (array $page) use ($navigationBadgeCount,
     $label = (string)($page['badge_provider'] ?? '') === 'production_calendar_warning'
         ? '!'
         : ($count > 999 ? '999+' : (string)$count);
-    return '<span class="nav-count is-alert" title="' . e($navigationBadgeTitle($page)) . '">' . e($label) . '</span>';
+    $class = (string)($page['badge_provider'] ?? '') === 'logist_contracts_pending' ? 'nav-count' : 'nav-count is-alert';
+    return '<span class="' . $class . '" data-badge-provider="' . e((string)($page['badge_provider'] ?? '')) . '" title="' . e($navigationBadgeTitle($page)) . '">' . e($label) . '</span>';
 };
 $wideWorkspacePrefixes = [
     '/company/clients',
     '/company/max/settings',
     '/company/roles-access',
     '/company/document-generator',
+    '/company/logistics/contracts',
     '/company/trips/linear',
     '/company/trips/departures',
     '/company/trips/gps-coverage',
@@ -390,7 +394,7 @@ if (empty($topbarCrumbs)) {
                     <div class="nav-item is-parent<?= $navigationGroupOpen ? ' is-open is-active' : '' ?>">
                         <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4h4l1.5 2H14v7H2V4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
                         <span class="nav-label"><?= e($navigationGroup) ?></span>
-                        <?php if ($navigationGroupBadgeCount > 0): ?><span class="nav-count is-alert" title="Требует внимания"><?= $navigationGroupBadgeCount > 999 ? '999+' : $navigationGroupBadgeCount ?></span><?php endif; ?>
+                        <?php if ($navigationGroupBadgeCount > 0): ?><span class="nav-count<?= $navigationGroup === 'Генератор договоров' ? '' : ' is-alert' ?>" data-badge-group="<?= e($navigationGroup) ?>" title="Требует внимания"><?= $navigationGroupBadgeCount > 999 ? '999+' : $navigationGroupBadgeCount ?></span><?php endif; ?>
                         <svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </div>
                     <div class="nav-sub<?= $navigationGroupOpen ? ' is-open' : '' ?>">
@@ -466,11 +470,13 @@ if (empty($topbarCrumbs)) {
                         <path d="M5.5 8H10.5M5.5 10.5H9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                     </svg>
                     <span class="nav-label">Генератор договоров</span>
+                    <?php if (($navigationCounters['logist_contracts_pending'] ?? 0) > 0): ?><span class="nav-count" title="Договоры логистов на согласовании"><?= (int)$navigationCounters['logist_contracts_pending'] ?></span><?php endif; ?>
                     <svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </div>
                 <div class="nav-sub<?= $documentGeneratorOpen ? ' is-open' : '' ?>">
                     <a class="nav-sub-item<?= $documentGeneratorCreateActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator') ?>"><span>Создать документ</span></a>
                     <a class="nav-sub-item<?= $documentGeneratorHistoryActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator/history') ?>"><span>История документов</span></a>
+                    <a class="nav-sub-item<?= $documentGeneratorLogistActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator/logist-contracts') ?>"><span>Договоры логистов</span><?php if (($navigationCounters['logist_contracts_pending'] ?? 0) > 0): ?><span class="nav-count"><?= (int)$navigationCounters['logist_contracts_pending'] ?></span><?php endif; ?></a>
                     <a class="nav-sub-item<?= $documentGeneratorTemplatesActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator/templates') ?>"><span>Шаблоны договоров</span></a>
                 </div>
                 <div class="nav-item is-parent<?= $directoriesOpen ? ' is-open' : '' ?>">
@@ -508,6 +514,7 @@ if (empty($topbarCrumbs)) {
 
             <div class="nav-group">
                 <div class="nav-section-label">ЛОГИСТЫ</div>
+                <a class="nav-item<?= $logistContractsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/contracts') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M9 13h6M9 17h6"/></svg><span class="nav-label">Договоры логистов</span></a>
                 <a class="nav-item<?= $requestPath === '/company/logistics/closing-documents' ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/closing-documents') ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 2h7l3 3v9H3zM10 2v3h3M5 8h6M5 11h6" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
                     <span class="nav-label">Закрывающие документы</span>
@@ -643,6 +650,8 @@ if (empty($topbarCrumbs)) {
             </div>
 
             <?php elseif ($roleCode === 'logist' || $roleCode === 'senior_logist'): ?>
+
+            <div class="nav-group"><div class="nav-section-label">ЛОГИСТЫ</div><a class="nav-item<?= $logistContractsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/contracts') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M9 13h6M9 17h6"/></svg><span class="nav-label">Договоры логистов</span></a></div>
 
             <div class="nav-group">
                 <div class="nav-section-label">ОПЕРАЦИИ</div>

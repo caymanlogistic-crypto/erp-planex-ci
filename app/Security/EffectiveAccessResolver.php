@@ -108,6 +108,18 @@ final class EffectiveAccessResolver
             $pages[$gpsKey] = false;
         }
 
+        // Existing waste-trip access opens the logist contract page until its
+        // dedicated permission is configured. Explicit denial always wins.
+        $contractKey = 'company.logistics.contracts';
+        if (($pages['company.trips.waste'] ?? false)
+            && !in_array($contractKey, $snapshot->configuredRolePageKeys, true)
+            && ($snapshot->pageOverrides[$contractKey] ?? 'inherit') === 'inherit') {
+            $pages[$contractKey] = true;
+        }
+        if (($scopes['waste_trip'] ?? EffectiveAccess::SCOPE_NONE) === EffectiveAccess::SCOPE_NONE) {
+            $pages[$contractKey] = false;
+        }
+
         return EffectiveAccess::member(
             $snapshot->membershipId,
             $snapshot->companyId,
