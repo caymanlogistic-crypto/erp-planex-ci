@@ -19,18 +19,36 @@ namespace {
 
     use App\Service\LinearTripServiceLineService;
 
-    $host = getenv('PLANEX_TEST_MYSQL_HOST') ?: '127.0.0.1';
-    $port = getenv('PLANEX_TEST_MYSQL_PORT') ?: '3306';
-    $user = getenv('PLANEX_TEST_MYSQL_USER') ?: 'root';
-    $pass = getenv('PLANEX_TEST_MYSQL_PASSWORD') ?: 'root';
-    $dbName = 'planex_linear_services_regression';
-
-    $server = new PDO("mysql:host={$host};port={$port};charset=utf8mb4", $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
-    $server->exec("DROP DATABASE IF EXISTS `{$dbName}`");
-    $server->exec("CREATE DATABASE `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $fixedDb = getenv('PLANEX_TEST_FIXED_DB') ?: '';
+    $fixed = $fixedDb !== '';
+    if ($fixed) {
+        if (getenv('APP_ENV') !== 'test'
+            || !preg_match('/^planex_t_[a-f0-9]{24}$/', $fixedDb)
+            || getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST') !== $fixedDb
+            || getenv('PLANEX_TEST_DB_LEASE') !== $fixedDb) {
+            throw new RuntimeException('Trusted isolated MySQL lease is required');
+        }
+        $host = getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1';
+        $port = getenv('PLANEX_SCHEMA_DB_PORT') ?: '33316';
+        $user = getenv('PLANEX_SCHEMA_DB_USER') ?: '';
+        $pass = getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: '';
+        if ($user === '' || $pass === '') {
+            throw new RuntimeException('Missing isolated MySQL credentials');
+        }
+        $dbName = $fixedDb;
+    } else {
+        $host = getenv('PLANEX_TEST_MYSQL_HOST') ?: '127.0.0.1';
+        $port = getenv('PLANEX_TEST_MYSQL_PORT') ?: '3306';
+        $user = getenv('PLANEX_TEST_MYSQL_USER') ?: 'root';
+        $pass = getenv('PLANEX_TEST_MYSQL_PASSWORD') ?: 'root';
+        $dbName = 'planex_linear_services_regression';
+        $server = new PDO("mysql:host={$host};port={$port};charset=utf8mb4", $user, $pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $server->exec("DROP DATABASE IF EXISTS `{$dbName}`");
+        $server->exec("CREATE DATABASE `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    }
 
     $pdo = new PDO("mysql:host={$host};port={$port};dbname={$dbName};charset=utf8mb4", $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -148,6 +166,8 @@ namespace {
     $activePayments = (int) $pdo->query("SELECT COUNT(*) FROM linear_route_service_payments WHERE linear_route_service_id={$serviceId} AND deleted_at IS NULL")->fetchColumn();
     $assert($activePayments === 0, 'removing service must leave no active service payments');
 
-    $server->exec("DROP DATABASE IF EXISTS `{$dbName}`");
+    if (!$fixed) {
+        $server->exec("DROP DATABASE IF EXISTS `{$dbName}`");
+    }
     fwrite(STDOUT, "linear_trip_service_persistence_mysql: PASS\n");
 }
