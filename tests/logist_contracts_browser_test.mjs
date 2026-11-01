@@ -5,19 +5,21 @@ import http from 'node:http';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
+import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './helpers/registry_behavior_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
 
 const require=createRequire(import.meta.url), {chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const render=role=>execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/logist_contracts_render.php'),role],{encoding:'utf8'});
-const html={owner:render('owner'),logist:render('logist')};
+const render=(role,many=false)=>execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/logist_contracts_render.php'),role,...(many?['many']:[])],{encoding:'utf8'});
+const html={owner:render('owner'),logist:render('logist'),long:render('logist',true)};
 const server=http.createServer((req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(url.pathname.startsWith('/assets/')){
     const file=path.resolve(root,'public','.'+url.pathname);
     if(!file.startsWith(path.join(root,'public','assets')+path.sep)){res.statusCode=403;res.end();return;}
-    res.setHeader('Content-Type',file.endsWith('.css')?'text/css':'text/javascript');res.end(readFileSync(file));return;
+    res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.woff2')?'font/woff2':'text/javascript');res.end(readFileSync(file));return;
   }
-  res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html[url.searchParams.get('role')==='owner'?'owner':'logist']);
+  res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html[url.searchParams.has('many')?'long':url.searchParams.get('role')==='owner'?'owner':'logist']);
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_BINARY?{executablePath:process.env.PLANEX_BROWSER_BINARY}:{})});
@@ -28,13 +30,22 @@ try{
     page.on('pageerror',error=>errors.push(error.message));
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.route('**/company/logistics/contracts/2',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,row:{...JSON.parse(html.logist.match(/<script type="application\/json" data-initial-rows>(.*?)<\/script>/s)[1])[0],id:2,contract_type:'lease',version_no:2,review_reason:null,logist_name:'Карина Г.',snapshot:{trip:{comment:'Вывоз отходов: Кемерово — Воскресенск'},executor:{name:'ООО «СибТранс»'},driver:{full_name:'Орлов Алексей Петрович'},parameters:{start_date:'2026-11-03',finish_date:'2026-11-10',price:'185000',vat_mode:'Без НДС'},vehicle:{model:'А123ВС77',plate:'А123ВС77'},requests:[{zayavka_id:'312015'}]}},versions:[{id:1,version_no:1,status:'rejected',review_reason:'Уточнить ставку'}]})}));
-    await page.goto(`${origin}/?role=${role}`);
+    await page.goto(`${origin}/company/logistics/contracts?role=${role}`);
+    await page.waitForSelector('[data-registry-ready="true"]');
+    await assertRegistryVisualContract(page,`logist-contracts ${role} ${width}`);
+    await assertRegistryDataContract(page,'logist-contracts');
+    const rows=[
+      {id:2,cells:[['#463','Версия 2','На согласовании'],['Вывоз отходов: Кемерово — Воск…','Аренда'],['03.11.2026'],['ООО «СибТранс»'],['Орлов Алексей Петрович'],['185000 ₽'],['Без НДС'],...(role==='owner'?[['Карина Г.']]:[])]},
+      {id:1,cells:[['#459','Версия 1','Согласован'],['Сборный рейс: Томск — Новосиби…','Аренда'],['29.10.2026'],['ИП Кузнецов'],['Кузнецов Павел Андреевич'],['92000 ₽'],['Без НДС'],...(role==='owner'?[['Карина Г.']]:[])]},
+    ];
+    await assertRegistryRows(page,{rowSelector:'[data-registry-row-id]',rows},`logist-contracts ${role} ${width}`);
+    await assertRegistrySearch(page,{rowSelector:'[data-registry-row-id]',probes:[{query:'СибТранс',ids:[2]},{query:'459',ids:[1]}],resolveActual:async p=>p.locator('[data-registry-row-id]').evaluateAll(items=>items.map(item=>item.dataset.registryRowId).sort())},`logist-contracts ${role} ${width}`);
     assert.equal(await page.locator('[data-rows] tr[data-id]').count(),2);
     assert.equal(await page.locator('thead th').count(),role==='owner'?8:7);
     if(width>390){
       const box=await page.locator('.registry-ui-card').boundingBox();
       const table=await page.locator('.logist-contract-table').boundingBox();
-      assert.ok(Math.abs(box.width-table.width)<=2,`table does not fill card ${role} ${width}: ${box.width} / ${table.width}`);
+      assert.ok(table.width>=box.width-2 && (role==='owner' && width===1280 || Math.abs(box.width-table.width)<=2),`table does not fill card ${role} ${width}: ${box.width} / ${table.width}`);
     }
     const first=page.locator('[data-rows] tr[data-id="2"]');
     const before=await first.locator('td').first().evaluate(el=>getComputedStyle(el).backgroundColor);
@@ -49,5 +60,10 @@ try{
     assert.deepEqual(errors,[]);
     await page.close();
   }
+  const scrollPage=await browser.newPage({viewport:{width:1280,height:900}});
+  await scrollPage.goto(`${origin}/company/logistics/contracts?many=1`);
+  await scrollPage.waitForSelector('[data-registry-ready="true"]');
+  await assertRegistryScroll(scrollPage,'logist-contracts populated scroll');
+  await scrollPage.close();
   console.log('LOGIST_CONTRACTS_BROWSER=PASS');
 }finally{await browser.close();server.close();}

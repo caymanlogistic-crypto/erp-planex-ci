@@ -66,12 +66,13 @@
     const visible = rows.filter(row => [row.business_id,row.description,row.contractor,row.driver,row.logist].join(' ').toLocaleLowerCase('ru-RU').includes(query));
     root.querySelector('[data-count]').textContent = visible.length;
     root.querySelector('[data-rows]').innerHTML = visible.length ? visible.map(row => `
-      <tr tabindex="0" data-id="${row.id}" class="${row.status === 'pending' ? 'registry-ui-warning' : ''}">
-        <td><span class="registry-id">#${row.business_id}</span><span class="registry-ui-secondary">Версия ${row.version}</span><span class="registry-ui-secondary">${statusLabel[row.status] || ''}</span></td>
-        <td class="registry-ui-trip-cell"><span class="registry-ui-trip" title="${escapeHtml(row.description)}">${escapeHtml(row.description || '—')}</span><span class="registry-ui-secondary">${typeLabel[row.type] || ''}</span></td>
-        <td>${formatDate(row.start)}</td><td>${escapeHtml(row.contractor || '—')}</td><td>${escapeHtml(row.driver || '—')}</td>
-        <td>${escapeHtml(row.price)} ₽</td><td>${escapeHtml(row.vat)}</td>${owner ? `<td>${escapeHtml(row.logist || '—')}</td>` : ''}
+      <tr tabindex="0" data-id="${row.id}" data-registry-row-id="${row.id}" class="${row.status === 'pending' ? 'registry-ui-warning' : ''}">
+        <td><span class="registry-id registry-ui-name">#${row.business_id}</span><span class="registry-ui-secondary">Версия ${row.version}</span><span class="registry-ui-secondary">${statusLabel[row.status] || ''}</span></td>
+        <td class="registry-ui-trip-cell"><span class="registry-ui-trip" data-registry-trip title="${escapeHtml(row.description)}">${escapeHtml(row.description || '—')}</span><span class="registry-ui-secondary">${typeLabel[row.type] || ''}</span></td>
+        <td class="registry-ui-primary">${formatDate(row.start)}</td><td class="registry-ui-primary">${escapeHtml(row.contractor || '—')}</td><td class="registry-ui-primary">${escapeHtml(row.driver || '—')}</td>
+        <td class="registry-ui-primary">${escapeHtml(row.price)} ₽</td><td class="registry-ui-primary">${escapeHtml(row.vat)}</td>${owner ? `<td class="registry-ui-primary">${escapeHtml(row.logist || '—')}</td>` : ''}
       </tr>`).join('') : `<tr><td colspan="${owner ? 8 : 7}" class="registry-ui-missing">Договоры не найдены.</td></tr>`;
+    window.PlanexRegistry?.textRoles(root);
   }
   function tripLabel(trip) { return '#' + trip.business_id + ' — ' + (trip.comment || trip.client_name || 'Рейс'); }
   function executorLabel(executor) { return [executor.contractor_name,executor.driver_full_name].filter(Boolean).join(' — '); }

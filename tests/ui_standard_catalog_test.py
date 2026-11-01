@@ -102,6 +102,7 @@ new_legacy['pages'].append({**new_legacy['pages'][0], 'id':'new-table', 'adaptat
 assert any('legacy exception is closed' in error for error in ui_standard.validate(new_legacy))
 
 false_current = copy.deepcopy(catalog)
+false_current['pages'][0] = copy.deepcopy(next(page for page in catalog['pages'] if page['id'] == 'route-executors'))
 false_current['pages'][0]['adaptation_status']='current_20261018'
 false_current['pages'][0]['view']='app/View/partials/registry_ui_head.php'
 assert any('current canon requires registry-ui-data' in error for error in ui_standard.validate(false_current))

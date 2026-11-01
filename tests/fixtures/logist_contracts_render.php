@@ -1,10 +1,19 @@
 <?php
 declare(strict_types=1);
-function base_path(string $path = ''): string { return dirname(__DIR__, 2) . '/' . ltrim($path, '/'); }
-function app_url(string $path = ''): string { return $path; }
-function e(mixed $value): string { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
-function csrfToken(): string { return 'test-token'; }
+$config = require dirname(__DIR__, 2).'/bootstrap/app.php';
+require BASE_PATH.'/app/Support/entrypoint_dependencies.php';
 $owner = ($argv[1] ?? '') === 'owner';
+$_SERVER['REQUEST_URI'] = $owner ? '/company/document-generator/logist-contracts' : '/company/logistics/contracts';
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SESSION = ['role_code'=>$owner ? 'company_owner' : 'logist','company_id'=>7,'user_id'=>11,'account_id'=>3,'user_name'=>'Карина Г.','membership_id'=>11];
+App\Security\AccessRuntime::setCurrent($owner
+    ? App\Security\EffectiveAccess::systemOwner(11,7,array_column(App\Security\PageRegistry::companyPages(),'key'))
+    : App\Security\EffectiveAccess::member(11,7,['company.logistics.contracts'=>true],[], 'logist'));
+$company = ['id'=>7,'name'=>'ООО «ПЛАНЭКС»','status'=>'active'];
+$db = new class([]) extends App\Core\Database { public function connection(): PDO { throw new RuntimeException('Fixture has no database'); } };
+$pageTitle='Договоры логистов'; $pageContext=$owner?'Генератор договоров':'Логисты';
+$pageStylesheets=['/assets/css/logist-contracts.css'];
+$pageScripts=['/assets/js/registry-components.js','/assets/js/logist-contracts.js'];
 $formError = null;
 $csrfToken = csrfToken();
 $rows = [[
@@ -28,5 +37,11 @@ $rows = [[
         'parameters'=>['start_date'=>'2026-10-29','finish_date'=>'2026-11-05','price'=>'92000','vat_mode'=>'Без НДС'],
     ],
 ]];
-ob_start(); require base_path('app/View/pages/company_logist_contracts.php'); $content=ob_get_clean();
-?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/registry-components.css"><link rel="stylesheet" href="/assets/css/logist-contracts.css"></head><body><main style="margin:24px auto;width:calc(100% - 48px)"><?= $content ?></main><script src="/assets/js/logist-contracts.js"></script></body></html>
+if (($argv[2] ?? '') === 'many') {
+    for ($i=3; $i<=55; $i++) {
+        $row=$rows[1]; $row['id']=$i; $row['business_id']=500+$i; $row['snapshot']['trip']['comment']='Сборный рейс '.$i;
+        $rows[]=$row;
+    }
+}
+ob_start(); require BASE_PATH.'/app/View/pages/company_logist_contracts.php'; $content=ob_get_clean();
+require BASE_PATH.'/app/View/layouts/main.php';

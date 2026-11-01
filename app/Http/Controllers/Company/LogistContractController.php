@@ -35,8 +35,8 @@ final class LogistContractController
             $formError = $error->getMessage();
         }
         $csrfToken = csrfToken();
-        $pageStylesheets = ['/assets/css/registry-components.css','/assets/css/logist-contracts.css'];
-        $pageScripts = ['/assets/js/logist-contracts.js'];
+        $pageStylesheets = ['/assets/css/logist-contracts.css'];
+        $pageScripts = ['/assets/js/registry-components.js','/assets/js/logist-contracts.js'];
         ob_start();
         require base_path('app/View/pages/company_logist_contracts.php');
         $content = ob_get_clean();
