@@ -1,0 +1,86 @@
+name: Document Schema Read Only Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_live_sha:
+        description: Exact verified /erpv2 deployed SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: document-schema-readonly-readiness
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  schema:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact canonical source and syntax
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          EXPECTED_LIVE: ${{ inputs.expected_live_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin "refs/heads/$CANONICAL_BRANCH" | awk '{print $1}')" = "$SOURCE_SHA"
+          [[ "$EXPECTED_LIVE" =~ ^[a-f0-9]{40}$ ]]
+          php -l scripts/document_schema_readiness_probe.php
+      - name: Configure pinned SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_KEY" && test -n "$KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/document_schema_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/document_schema_key" "$HOME/.ssh/known_hosts"
+      - name: Probe every active tenant without writes
+        env:
+          EXPECTED_LIVE: ${{ inputs.expected_live_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$SSH_HOST" && test -n "$SSH_PORT" && test -n "$SSH_USER"
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/document_schema_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$SSH_USER@$SSH_HOST")
+          deployed="$("${SSH[@]}" "cat '$DEPLOY_MARKER'")"
+          test "$deployed" = "$EXPECTED_LIVE"
+          git merge-base --is-ancestor "$deployed" HEAD
+          sha256sum scripts/document_schema_readiness_probe.php | tee probe_source_sha256.txt
+          cat scripts/document_schema_readiness_probe.php | "${SSH[@]}" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 -d display_errors=0" | tee document_schema_readiness.txt
+          grep -Eq '^DOCUMENT_SCHEMA_READ_ONLY_READY companies=[1-9][0-9]*$' document_schema_readiness.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: document-schema-readonly-${{ github.run_id }}
+          path: |
+            document_schema_readiness.txt
+            probe_source_sha256.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Remove task key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/document_schema_key"
