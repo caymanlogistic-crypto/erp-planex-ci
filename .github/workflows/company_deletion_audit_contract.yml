@@ -9,8 +9,10 @@ on:
       - 'app/Support/company_database.php'
       - 'database/migrations/021_company_deletion_runs.sql'
       - 'scripts/company_deletion_seal_backup_manifest.php'
+      - 'scripts/company_deletion_021_migration.php'
       - 'tests/company_deletion_*'
       - '.github/workflows/company_deletion_audit_contract.yml'
+      - '.github/workflows/company_deletion_021_production_migration.yml'
   workflow_dispatch:
 
 permissions:
@@ -41,20 +43,36 @@ jobs:
           php -l app/Service/CompanyDeletionService.php
           php -l app/Http/Routes/superadmin_company_delete.php
           php -l scripts/company_deletion_seal_backup_manifest.php
+          php -l scripts/company_deletion_021_migration.php
           php tests/company_deletion_backup_verifier_test.php
+          php tests/company_deletion_021_production_migration_contract_test.php
       - name: Create isolated restricted MySQL fixtures
         run: |
           mysql -h 127.0.0.1 -uroot -proot <<'SQL'
           CREATE DATABASE planex_cd_journal_test CHARACTER SET utf8mb4;
           CREATE DATABASE planex_cd_central_test CHARACTER SET utf8mb4;
           CREATE DATABASE planex_cd_tenant_test CHARACTER SET utf8mb4;
+          CREATE DATABASE planex_cd_migration_test CHARACTER SET utf8mb4;
           CREATE USER 'px_cd_journal'@'%' IDENTIFIED BY 'ci_fixture_journal';
           CREATE USER 'px_cd_central'@'%' IDENTIFIED BY 'ci_fixture_central';
           CREATE USER 'px_cd_tenant'@'%' IDENTIFIED BY 'ci_fixture_tenant';
+          CREATE USER 'px_cd_migration'@'%' IDENTIFIED BY 'ci_fixture_migration';
           GRANT ALL PRIVILEGES ON planex_cd_journal_test.* TO 'px_cd_journal'@'%';
           GRANT ALL PRIVILEGES ON planex_cd_central_test.* TO 'px_cd_central'@'%';
           GRANT ALL PRIVILEGES ON planex_cd_tenant_test.* TO 'px_cd_tenant'@'%';
+          GRANT ALL PRIVILEGES ON planex_cd_migration_test.* TO 'px_cd_migration'@'%';
           SQL
+      - name: Guarded central migration 021 lifecycle
+        env:
+          APP_ENV: test
+          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+          PLANEX_SCHEMA_DB_PORT: '3306'
+          PLANEX_SCHEMA_DB_USER: px_cd_migration
+          PLANEX_SCHEMA_DB_PASSWORD: ci_fixture_migration
+          PLANEX_TEST_FIXED_DB: planex_cd_migration_test
+          PLANEX_TEST_FIXED_DB_ALLOWLIST: planex_cd_migration_test
+          PLANEX_TEST_DB_LEASE: planex_cd_migration_test
+        run: php tests/company_deletion_021_production_migration_mysql_test.php
       - name: Journal and fail-closed preflight
         env:
           APP_ENV: test
