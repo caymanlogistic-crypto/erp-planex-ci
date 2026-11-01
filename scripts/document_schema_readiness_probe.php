@@ -71,12 +71,15 @@ if (!defined('PLANEX_DOCUMENT_SCHEMA_PROBE_LIBRARY_ONLY')) {
         $central->exec('SET TRANSACTION READ ONLY');
         $central->beginTransaction();
         try {
-            $companies = $central->query("SELECT id,db_identifier,db_host,db_port,db_username,db_password FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id")->fetchAll();
+            $companies = $central->query("SELECT id,db_identifier,db_host,db_port,db_username,db_password FROM companies WHERE status='active' ORDER BY id")->fetchAll();
             if (count($companies) < 1 || count($companies) > 200) {
                 throw new RuntimeException('COMPANY_SCOPE');
             }
             $allReady = true;
             foreach ($companies as $company) {
+                if (trim((string) $company['db_identifier']) === '') {
+                    throw new RuntimeException('COMPANY_SCOPE');
+                }
                 $tenant = $connect(companyDatabaseConfig($config, $company));
                 $state = DocumentSchemaReadinessProbe::inspect($tenant);
                 $allReady = $allReady && $state['ready'];
