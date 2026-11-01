@@ -86,6 +86,10 @@ jobs:
       - name: Bank invoice settlement behavioral regression
         run: php tests/finance_bank_invoice_settlement_behavioral_test.php
       - name: Invoice payment timeline behavioral regression
+        env:
+          PLANEX_FINANCE_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=erp_obligations_test;charset=utf8mb4
+          PLANEX_FINANCE_TEST_USER: root
+          PLANEX_FINANCE_TEST_PASSWORD: root
         run: php tests/finance_invoice_payment_timeline_behavioral_test.php
       - name: Late invoice inherits direct prepayment behavioral regression
         run: php tests/finance_invoice_prepayment_behavioral_test.php
