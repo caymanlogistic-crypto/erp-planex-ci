@@ -67,11 +67,11 @@ try {
     $localPdo = $localDb->connection();
     applyLocalMigrations($localPdo);
 
-    try { $localPdo->query("SELECT 1 FROM contractors LIMIT 1")->fetch(); } catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/003_create_company_contractors.sql'))); }
-    try { $localPdo->query("SELECT 1 FROM drivers LIMIT 1")->fetch(); } catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/004_create_company_drivers.sql'))); }
-    try { $localPdo->query("SELECT 1 FROM vehicle_sets LIMIT 1")->fetch(); } catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/017_create_vehicle_sets.sql'))); }
-    try { $localPdo->query("SELECT 1 FROM driver_vehicle_blocks LIMIT 1")->fetch(); } catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/018_create_driver_vehicle_blocks.sql'))); }
-    try { $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch(); } catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql'))); }
+    $localPdo->query('SELECT 1 FROM contractors LIMIT 0');
+    $localPdo->query('SELECT 1 FROM drivers LIMIT 0');
+    $localPdo->query('SELECT 1 FROM vehicle_sets LIMIT 0');
+    $localPdo->query('SELECT 1 FROM driver_vehicle_blocks LIMIT 0');
+    $localPdo->query('SELECT 1 FROM crews LIMIT 0');
 
     $contractorStmt = $localPdo->prepare('SELECT * FROM contractors WHERE id = ?');
     $contractorStmt->execute([$contractorId]);

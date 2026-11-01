@@ -10,7 +10,7 @@ if(!$VSC_company){$VSC_company=null;$VSC_formError='Компания не най
 $VSC_pageContext='Транспорт > Компания: '.$VSC_company['name'];if(($VSC_company['status']??'')!=='active'){$VSC_formError='Компания недоступна';goto VSC_render;}
 $VSC_cfg=companyDatabaseConfig($config, $VSC_company);$VSC_ldb=new \App\Core\Database($VSC_cfg);$VSC_lpdo=$VSC_ldb->connection();applyLocalMigrations($VSC_lpdo);
 $VSC_membershipId=\App\Service\RegulatedDataScopeService::assertCanCreate('vehicle_unit');
-try{$VSC_lpdo->query('SELECT 1 FROM document_types LIMIT 1')->fetch();}catch(\Exception$e){$VSC_lpdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));$VSC_lpdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));}
+$VSC_lpdo->query('SELECT 1 FROM document_types LIMIT 0');
 $VSC_docTypes=$VSC_lpdo->query("SELECT id,name,code,entity_type FROM document_types WHERE entity_type='vehicle_unit' OR entity_type IS NULL ORDER BY sort_order,name")->fetchAll(PDO::FETCH_ASSOC);
 if(isPostTruncated()){$VSC_formError='Общий размер отправки превышает серверный лимит.';goto VSC_render;}
 // Use helper functions from the runtime

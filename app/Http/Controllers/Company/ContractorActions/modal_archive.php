@@ -16,21 +16,8 @@ try {
 
     $localPdo = $service->getLocalPdo($company);
 
-    try {
-        $localPdo->query("SELECT 1 FROM contractors LIMIT 1")->fetch();
-    } catch (\Exception $e) {
-        $localPdo->exec(file_get_contents(base_path('database/migrations-local/003_create_company_contractors.sql')));
-    }
-    try {
-        $localPdo->query("SELECT created_by_user_id FROM contractors LIMIT 1")->fetch();
-    } catch (\Exception $e) {
-        $localPdo->exec("ALTER TABLE contractors ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL");
-    }
-    try {
-        $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch();
-    } catch (\Exception $e) {
-        $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql')));
-    }
+    $localPdo->query('SELECT created_by_user_id, created_by_role FROM contractors LIMIT 0');
+    $localPdo->query('SELECT 1 FROM crews LIMIT 0');
 
     $contractor = $service->getContractorById($localPdo, (int) $id);
     if (!$contractor) {

@@ -47,11 +47,7 @@ try {
     $localPdo = $localDb->connection();
     applyLocalMigrations($localPdo);
 
-    try {
-        $localPdo->query("SELECT 1 FROM contractors LIMIT 1")->fetch();
-    } catch (\Exception $e) {
-        $localPdo->exec(file_get_contents(base_path('database/migrations-local/003_create_company_contractors.sql')));
-    }
+    $localPdo->query('SELECT 1 FROM contractors LIMIT 0');
 
     try {
         $contractorsStmt = $localPdo->query(

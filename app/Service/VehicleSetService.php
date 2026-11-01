@@ -28,13 +28,9 @@ final class VehicleSetService
         $cfg = companyDatabaseConfig($this->config, $company);
         $localDb = new Database($cfg);
         $pdo = $localDb->connection();
-        applyLocalMigrations($pdo);
-        try { $pdo->query("SELECT 1 FROM vehicle_sets LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $pdo->exec(file_get_contents(base_path('database/migrations-local/017_create_vehicle_sets.sql'))); }
-        try { $pdo->query("SELECT 1 FROM vehicle_units LIMIT 1")->fetch(); }
-        catch (\Exception $e) { try { $pdo->exec("RENAME TABLE vehicles TO vehicle_units"); } catch (\Exception $x) {} }
-        try { $pdo->query("SELECT created_by_user_id FROM vehicle_sets LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $pdo->exec("ALTER TABLE vehicle_sets ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL"); }
+        applyLocalMigrations($pdo); // Normal HTTP is a no-op by runtime_migration_policy.
+        $pdo->query('SELECT created_by_user_id, created_by_role FROM vehicle_sets LIMIT 0');
+        $pdo->query('SELECT 1 FROM vehicle_units LIMIT 0');
         return $pdo;
     }
 
@@ -101,10 +97,8 @@ final class VehicleSetService
 
     public function ensureDocumentTables(PDO $pdo): void
     {
-        try { $pdo->query("SELECT 1 FROM documents LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $pdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql'))); }
-        try { $pdo->query("SELECT 1 FROM document_types LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $pdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql'))); $pdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql'))); }
+        $pdo->query('SELECT document_type_id FROM documents LIMIT 0');
+        $pdo->query('SELECT 1 FROM document_types LIMIT 0');
     }
 
     public function checkLogistAccess(PDO $pdo, int $entityId, int $userId): ?string

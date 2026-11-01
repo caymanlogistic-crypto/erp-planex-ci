@@ -8,14 +8,7 @@ final class ClientContactService
 {
     public static function ensureTable(PDO $pdo): void
     {
-        try {
-            $pdo->query('SELECT 1 FROM client_contacts LIMIT 1')->fetch();
-        } catch (\Throwable $e) {
-            $migrationSql = file_get_contents(base_path('database/migrations-local/031_create_client_contacts.sql'));
-            if ($migrationSql !== false) {
-                $pdo->exec($migrationSql);
-            }
-        }
+        $pdo->query('SELECT 1 FROM client_contacts LIMIT 0');
     }
 
     public static function loadByClientId(PDO $pdo, int $clientId): array
