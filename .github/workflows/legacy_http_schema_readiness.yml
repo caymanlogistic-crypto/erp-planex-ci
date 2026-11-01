@@ -1,0 +1,98 @@
+name: Legacy HTTP Schema Read Only Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_live_sha:
+        description: Exact verified /erpv2 deployed SHA
+        required: true
+        type: string
+      scope:
+        description: Active HTTP route family whose schema prerequisites must be ready
+        required: true
+        type: choice
+        options:
+          - logists
+          - clients
+          - transport
+          - linear
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legacy-http-schema-readonly-readiness
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  schema:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact canonical source and syntax
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          EXPECTED_LIVE: ${{ inputs.expected_live_sha }}
+          SCHEMA_SCOPE: ${{ inputs.scope }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin "refs/heads/$CANONICAL_BRANCH" | awk '{print $1}')" = "$SOURCE_SHA"
+          [[ "$EXPECTED_LIVE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SCHEMA_SCOPE" =~ ^(logists|clients|transport|linear)$ ]]
+          php -l scripts/legacy_http_schema_readiness_probe.php
+      - name: Configure pinned SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_KEY" && test -n "$KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/legacy_http_schema_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/legacy_http_schema_key" "$HOME/.ssh/known_hosts"
+      - name: Probe every active tenant without writes
+        env:
+          EXPECTED_LIVE: ${{ inputs.expected_live_sha }}
+          SCHEMA_SCOPE: ${{ inputs.scope }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$SSH_HOST" && test -n "$SSH_PORT" && test -n "$SSH_USER"
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/legacy_http_schema_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$SSH_USER@$SSH_HOST")
+          deployed="$("${SSH[@]}" "cat '$DEPLOY_MARKER'")"
+          test "$deployed" = "$EXPECTED_LIVE"
+          git merge-base --is-ancestor "$deployed" HEAD
+          sha256sum scripts/legacy_http_schema_readiness_probe.php | tee probe_source_sha256.txt
+          cat scripts/legacy_http_schema_readiness_probe.php | "${SSH[@]}" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_SCHEMA_SCOPE='$SCHEMA_SCOPE' /usr/bin/php8.5 -d display_errors=0" | tee legacy_http_schema_readiness.txt
+          grep -Eq "^LEGACY_HTTP_SCHEMA_READ_ONLY_READY scope=$SCHEMA_SCOPE companies=[1-9][0-9]*$" legacy_http_schema_readiness.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: legacy-http-schema-readonly-${{ github.run_id }}
+          path: |
+            legacy_http_schema_readiness.txt
+            probe_source_sha256.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Remove task key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/legacy_http_schema_key"
