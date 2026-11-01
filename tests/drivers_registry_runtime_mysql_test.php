@@ -8,7 +8,8 @@ $config['database']=['host'=>getenv('PLANEX_SCHEMA_DB_HOST'),'port'=>getenv('PLA
 $db=new \App\Core\Database($config['database']);$pdo=$db->connection();
 $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
 $stmt=$pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)');$stmt->execute(['ООО Synthetic','active',$schema]);
-$pdo->exec('CREATE TABLE drivers(id INT PRIMARY KEY,full_name VARCHAR(255),phone VARCHAR(50),email VARCHAR(255),passport_number VARCHAR(50),passport_issued_by VARCHAR(255),passport_issue_date DATE,license_number VARCHAR(50),license_issue_date DATE,snils VARCHAR(50),created_by_user_id INT,deleted_at DATETIME,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+$pdo->exec('CREATE TABLE drivers(id INT PRIMARY KEY,full_name VARCHAR(255),phone VARCHAR(50),email VARCHAR(255),passport_number VARCHAR(50),passport_issued_by VARCHAR(255),passport_issue_date DATE,license_number VARCHAR(50),license_issue_date DATE,snils VARCHAR(50),created_by_user_id INT,created_by_role VARCHAR(20),deleted_at DATETIME,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+$pdo->exec('CREATE TABLE entity_access_grants(id INT PRIMARY KEY)');
 $pdo->exec("INSERT INTO drivers(id,full_name,phone,email) VALUES(41,'Иванов Иван Иванович','+7 900 111-22-33','driver@example.test')");
 $pdo->exec('CREATE TABLE driver_phones(driver_id INT,phone VARCHAR(50),is_main INT)');
 $pdo->exec('CREATE TABLE documents(id INT PRIMARY KEY,entity_type VARCHAR(30),entity_id INT,deleted_at DATETIME,created_by_user_id INT)');

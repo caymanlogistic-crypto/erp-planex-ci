@@ -34,47 +34,22 @@ final class ClientService
         $localDbConfig = companyDatabaseConfig($this->config, $company);
         $localDb = new Database($localDbConfig);
         $localPdo = $localDb->connection();
-        applyLocalMigrations($localPdo);
+        applyLocalMigrations($localPdo); // Normal HTTP is a no-op by runtime_migration_policy.
         $this->ensureClientTables($localPdo);
         return $localPdo;
     }
 
     public function ensureClientTables(PDO $localPdo): void
     {
-        try {
-            $localPdo->query("SELECT 1 FROM clients LIMIT 1")->fetch();
-        } catch (\Exception $e) {
-            $migrationSql = file_get_contents(base_path('database/migrations-local/002_create_company_clients.sql'));
-            $localPdo->exec($migrationSql);
-        }
-
-        try {
-            $localPdo->query("SELECT created_by_user_id FROM clients LIMIT 1")->fetch();
-        } catch (\Exception $e) {
-            $localPdo->exec("ALTER TABLE clients ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL");
-        }
-
-        try {
-            $localPdo->query("SELECT 1 FROM entity_access_grants LIMIT 1")->fetch();
-        } catch (\Exception $e) {
-            $migrationSql = file_get_contents(base_path('database/migrations-local/009_create_entity_access_grants.sql'));
-            $localPdo->exec($migrationSql);
-        }
+        // HTTP reads and writes require the provisioned tenant schema.
+        $localPdo->query('SELECT created_by_user_id, created_by_role FROM clients LIMIT 0');
+        $localPdo->query('SELECT 1 FROM entity_access_grants LIMIT 0');
     }
 
     public function ensureDocumentTables(PDO $localPdo): void
     {
-        try {
-            $localPdo->query("SELECT 1 FROM documents LIMIT 1")->fetch();
-        } catch (\Exception $e) {
-            $localPdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql')));
-        }
-        try {
-            $localPdo->query("SELECT 1 FROM document_types LIMIT 1")->fetch();
-        } catch (\Exception $e) {
-            $localPdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));
-            $localPdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));
-        }
+        $localPdo->query('SELECT document_type_id FROM documents LIMIT 0');
+        $localPdo->query('SELECT 1 FROM document_types LIMIT 0');
     }
 
     public function listClients(PDO $localPdo, bool $isLogist, int $userId): array

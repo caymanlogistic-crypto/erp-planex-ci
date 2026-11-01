@@ -1,0 +1,81 @@
+name: Service HTTP Schema Readonly Contract
+
+on:
+  pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
+    paths:
+      - 'app/Service/ClientService.php'
+      - 'app/Service/ClientContactService.php'
+      - 'app/Service/ContractorService.php'
+      - 'app/Service/ContractorContactService.php'
+      - 'app/Service/DriverService.php'
+      - 'app/Service/VehicleSetService.php'
+      - 'app/Http/Controllers/Company/ContractorActions/add_crew_form.php'
+      - 'app/Http/Controllers/Company/ContractorActions/add_crew_submit.php'
+      - 'app/Http/Controllers/Company/ContractorActions/create_full_form.php'
+      - 'app/Http/Controllers/Company/ContractorActions/create_full_submit.php'
+      - 'app/Http/Controllers/Company/ContractorActions/archive.php'
+      - 'app/Http/Controllers/Company/ContractorActions/modal_archive.php'
+      - 'app/Http/Controllers/Company/VehicleSetActions/create_submit.php'
+      - 'tests/service_http_schema_readonly_mysql_test.php'
+      - 'tests/drivers_registry_runtime_mysql_test.php'
+      - 'tools/dynamic_table_safety_audit.py'
+      - '.github/workflows/service_http_schema_readonly_contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare disposable restricted schema
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot <<'SQL'
+          CREATE DATABASE planex_t_111111111111111111111111 CHARACTER SET utf8mb4;
+          CREATE DATABASE planex_t_222222222222222222222222 CHARACTER SET utf8mb4;
+          CREATE USER 'px_http_schema'@'%' IDENTIFIED BY 'ci_fixture_only';
+          CREATE USER 'px_driver_page'@'%' IDENTIFIED BY 'ci_fixture_driver';
+          GRANT ALL PRIVILEGES ON planex_t_111111111111111111111111.* TO 'px_http_schema'@'%';
+          GRANT ALL PRIVILEGES ON planex_t_222222222222222222222222.* TO 'px_driver_page'@'%';
+          SQL
+      - name: Six HTTP service boundaries and fail-closed MySQL behavior
+        env:
+          APP_ENV: test
+          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+          PLANEX_SCHEMA_DB_PORT: '3306'
+          PLANEX_SCHEMA_DB_USER: px_http_schema
+          PLANEX_SCHEMA_DB_PASSWORD: ci_fixture_only
+          PLANEX_TEST_FIXED_DB: planex_t_111111111111111111111111
+          PLANEX_TEST_FIXED_DB_ALLOWLIST: planex_t_111111111111111111111111
+          PLANEX_TEST_DB_LEASE: planex_t_111111111111111111111111
+        run: |
+          php -l tests/service_http_schema_readonly_mysql_test.php
+          php tests/service_http_schema_readonly_mysql_test.php
+          python3 tools/dynamic_table_safety_audit.py
+      - name: Real bootstrap driver registry regression
+        env:
+          APP_ENV: test
+          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+          PLANEX_SCHEMA_DB_PORT: '3306'
+          PLANEX_SCHEMA_DB_USER: px_driver_page
+          PLANEX_SCHEMA_DB_PASSWORD: ci_fixture_driver
+          PLANEX_TEST_FIXED_DB: planex_t_222222222222222222222222
+          PLANEX_TEST_FIXED_DB_ALLOWLIST: planex_t_222222222222222222222222
+          PLANEX_TEST_DB_LEASE: planex_t_222222222222222222222222
+        run: php tests/drivers_registry_runtime_mysql_test.php
