@@ -1,5 +1,8 @@
 # FINAL HANDOFF PACKAGE REPORT
 
+> Архивный отчёт от 28.06.2026. Описывает состояние на дату проверки и не служит действующей инструкцией или источником учётных данных.
+
+
 ## Status: FINAL_DOCUMENTACTIONS_ACCEPTED
 
 **Date**: 2026-06-28
@@ -122,8 +125,8 @@ All tests performed on PHP 8.5.6 built-in server.
 |------|-------|----------|
 | Owner | `owner_test_runtime` | `test1234` |
 | Senior Logist | `senior_runtime_1` | `senior1234` |
-| Logist 1 | `logist_runtime_1` | `pass1111` |
-| Logist 2 | `logist_runtime_2` | `pass2222` |
+| Logist 1 | `logist_runtime_1` | `[удалено]` |
+| Logist 2 | `logist_runtime_2` | `[удалено]` |
 | Superadmin | `admin@planex.local` | `test1234` |
 
 ---

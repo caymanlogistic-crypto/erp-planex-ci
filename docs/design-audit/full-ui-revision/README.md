@@ -1,5 +1,8 @@
 # FULL UI REVISION — ERP PLANEX
 
+> Архивный снимок июня 2026 года. Схема ролей, доступы, команды и интерфейс могли измениться; для текущей работы используйте AGENTS.md, LOCAL-DEVELOPMENT.md и актуальный canonical код.
+
+
 ## Актуализация 2026-06-26 — Исполнители рейса / Транспорт
 
 Статус: подготовлен пакет исправлений `ERP_ROUTE_EXECUTORS_VEHICLE_SETS_FIXED_STRUCTURE_v4_SCHEMA_REAL.zip`; перед финальной фиксацией владелец должен применить файлы, проверить runtime и затем закоммитить результат.
@@ -39,12 +42,7 @@ docs/design-audit/full-ui-revision/screenshots/
 
 ## Какие роли покрыты
 
-| Роль | Логин | Пароль | Компания |
-|---|---|---|---|
-| superadmin | admin@planex.local | admin123 | все |
-| company_owner | owner_test_runtime | pass1234 | ООО "Тест Этап 2 Runtime" (ID=9) |
-| logist (владелец записей) | logist_runtime_1 | pass1111 | 9 |
-| logist (grant-доступ) | logist_runtime_2 | pass2222 | 9 |
+Роли исторических снимков: superadmin, company_owner и два logist. Учётные данные удалены из публикуемой документации.
 
 ## Какие документы читать проверяющему
 
@@ -53,20 +51,9 @@ docs/design-audit/full-ui-revision/screenshots/
 3. **SCREENSHOT_MANIFEST.md** — связь каждого screenshot со страницей, размер, URL, роль, состояние, валидность.
 4. **RUNTIME_ACCESS_NOTES.md** — тестовые доступы, runtime-сущности, ID, гранты, проверенные сценарии.
 
-## Как запускать ERP
+## Запуск текущей ERP
 
-```bat
-cd /d C:\Users\Vladimir\Desktop\PLANEX\SITE\erp
-php -S 127.0.0.1:8016 -t public public/index.php
-```
-
-Базовый URL: http://127.0.0.1:8016
-
-## Как логиниться
-
-1. Открыть http://127.0.0.1:8016/login
-2. Использовать учётные данные из таблицы выше
-3. Каждая роль показывает разный интерфейс и разный набор страниц
+Этот пакет датирован июнем 2026 года и не является инструкцией для текущего запуска. Используйте `C:\plan-ex\ERP-PLANEX\LOCAL-DEVELOPMENT.md` и задачу с собственным `TASK_ID`, worktree и динамическим портом.
 
 ## Основные файлы пакета
 
