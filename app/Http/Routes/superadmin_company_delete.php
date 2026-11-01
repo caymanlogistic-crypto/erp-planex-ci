@@ -73,7 +73,8 @@ $router->get('/superadmin/companies/{id}/delete', function ($id) use ($config, $
             $localDbConfig = companyDatabaseConfig($config, $company);
             $localDb = new \App\Core\Database($localDbConfig);
             $localPdo = $localDb->connection();
-                applyLocalMigrations($localPdo);
+            // Deletion preview must remain read-only. Missing tenant tables
+            // are reported through the existing preview error handler.
 
             $tables = [
                 'users' => 'logists_count',
@@ -176,7 +177,7 @@ $router->post('/superadmin/companies/{id}/delete', function ($id) use ($config, 
                 $localDbConfig = companyDatabaseConfig($config, $company);
                 $localDb = new \App\Core\Database($localDbConfig);
                 $localPdo = $localDb->connection();
-                applyLocalMigrations($localPdo);
+                // Invalid confirmation only rebuilds a read-only preview.
 
                 $tables = [
                     'users' => 'logists_count', 'clients' => 'clients_count',
@@ -235,7 +236,7 @@ $router->post('/superadmin/companies/{id}/delete', function ($id) use ($config, 
     }
 
     // === EXECUTE DELETION via service ===
-    $result = \App\Service\CompanyDeletionService::delete($pdo, $company, $config);
+    $result = \App\Service\CompanyDeletionService::delete($pdo, $company, $config, (int)($_SESSION['user_id'] ?? 0));
 
     if ($result['success']) {
         header('Location: /superadmin/companies?deleted=' . $companyId);

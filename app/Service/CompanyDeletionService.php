@@ -9,7 +9,7 @@ use RecursiveIteratorIterator;
 
 final class CompanyDeletionService
 {
-    public static function delete(PDO $centralPdo, array $company, array $config): array
+    public static function delete(PDO $centralPdo, array $company, array $config, int $actorUserId): array
     {
         $companyId = (int)$company['id'];
         $dbIdentifier = $company['db_identifier'] ?? '';
@@ -22,6 +22,29 @@ final class CompanyDeletionService
             'verification' => [],
         ];
 
+        // No destructive operation may begin without durable evidence and a
+        // fresh, signed backup of this exact company and both data locations.
+        try {
+            $backup = CompanyDeletionBackupVerifier::verify(
+                $company,
+                (string)getenv('PLANEX_COMPANY_DELETION_BACKUP_ROOT'),
+                (string)getenv('PLANEX_COMPANY_DELETION_BACKUP_HMAC_KEY')
+            );
+            if ($isPoolDb) {
+                // Read-only presence check: CREATE TABLE during the later
+                // central transaction would cause an implicit MySQL commit.
+                $centralPdo->query('SELECT 1 FROM company_db_pool_usage LIMIT 1');
+            }
+            $runId = CompanyDeletionJournal::begin($centralPdo, $company, $actorUserId, $backup);
+            $result['steps'][] = ['step' => 'backup_verified', 'status' => 'success'];
+        } catch (\Throwable $e) {
+            $result['success'] = false;
+            $result['errors'][] = 'Удаление остановлено: проверенная резервная копия и журнал обязательны.';
+            $result['steps'][] = ['step' => 'backup_and_journal', 'status' => 'fail', 'code' => $e->getMessage()];
+            return $result;
+        }
+        $stage = 'backup_verified';
+
         $storageAbs = storage_path('companies/' . $companyId);
         $storageAbsReal = realpath($storageAbs);
         $projectRoot = realpath(base_path(''));
@@ -33,6 +56,14 @@ final class CompanyDeletionService
         }
 
         $storageExists = $resolvedStorage !== false && is_dir($resolvedStorage);
+        if (is_link($storageAbs)
+            || ($storageAbsReal !== false && $resolvedStorage === false)
+            || (file_exists($storageAbs) && !is_dir($storageAbs))) {
+            CompanyDeletionJournal::fail($centralPdo, $runId, $stage, 'STORAGE_PATH_INVALID');
+            $result['success'] = false;
+            $result['errors'][] = 'Удаление остановлено: путь хранилища компании некорректен.';
+            return $result;
+        }
 
         // === STEP 1: Clean pool DB or drop separate DB ===
         if ($isPoolDb && $dbIdentifier !== '') {
@@ -67,6 +98,7 @@ final class CompanyDeletionService
 
                 $result['steps'][] = ['step' => 'pool_db_clean', 'status' => 'success', 'db' => $dbIdentifier];
             } catch (\Exception $e) {
+                CompanyDeletionJournal::fail($centralPdo, $runId, $stage, 'TENANT_DELETE_FAILED');
                 $msg = 'Ошибка очистки pool БД: ' . $e->getMessage();
                 $result['steps'][] = ['step' => 'pool_db_clean', 'status' => 'fail', 'error' => $msg];
                 $result['errors'][] = $msg;
@@ -82,6 +114,7 @@ final class CompanyDeletionService
                 $sysPdo->exec("DROP DATABASE IF EXISTS `{$dbIdentifier}`");
                 $result['steps'][] = ['step' => 'drop_database', 'status' => 'success', 'db' => $dbIdentifier];
             } catch (\Exception $e) {
+                CompanyDeletionJournal::fail($centralPdo, $runId, $stage, 'TENANT_DELETE_FAILED');
                 $msg = 'Ошибка удаления отдельной БД: ' . $e->getMessage();
                 $result['steps'][] = ['step' => 'drop_database', 'status' => 'fail', 'error' => $msg];
                 $result['errors'][] = $msg;
@@ -91,6 +124,8 @@ final class CompanyDeletionService
         } else {
             $result['steps'][] = ['step' => 'drop_database', 'status' => 'skipped', 'reason' => 'no separate or pool DB'];
         }
+        CompanyDeletionJournal::advance($centralPdo, $runId, $stage, 'tenant_deleted');
+        $stage = 'tenant_deleted';
 
         // === STEP 2: Delete storage/companies/{id} ===
         if ($storageExists) {
@@ -101,6 +136,7 @@ final class CompanyDeletionService
                 }
                 $result['steps'][] = ['step' => 'delete_storage', 'status' => 'success'];
             } catch (\Exception $e) {
+                CompanyDeletionJournal::fail($centralPdo, $runId, $stage, 'STORAGE_DELETE_FAILED');
                 $msg = 'Ошибка удаления storage: ' . $e->getMessage();
                 $result['steps'][] = ['step' => 'delete_storage', 'status' => 'fail', 'error' => $msg];
                 $result['errors'][] = $msg;
@@ -110,6 +146,8 @@ final class CompanyDeletionService
         } else {
             $result['steps'][] = ['step' => 'delete_storage', 'status' => 'skipped', 'reason' => 'storage directory does not exist'];
         }
+        CompanyDeletionJournal::advance($centralPdo, $runId, $stage, 'storage_deleted');
+        $stage = 'storage_deleted';
 
         // === STEP 3: Central transaction — delete all company-owned records ===
         try {
@@ -117,16 +155,22 @@ final class CompanyDeletionService
 
             // Release pool DB inside the same central transaction before commit
             if ($isPoolDb && $dbIdentifier !== '') {
-                releasePoolDb($centralPdo, $dbIdentifier);
+                $release = $centralPdo->prepare(
+                    "UPDATE company_db_pool_usage
+                     SET company_id=NULL, released_at=NOW(), note='superadmin_delete'
+                     WHERE db_identifier=? AND company_id=? AND released_at IS NULL"
+                );
+                $release->execute([$dbIdentifier, $companyId]);
+                if ($release->rowCount() !== 1) {
+                    throw new \RuntimeException('Pool DB reservation changed during deletion.');
+                }
             }
 
-            // Clean up any pre-existing deleted_entities rows for this company
+            // OWNER 2026-11-01: preserve prior deleted_entities for audit even
+            // after the company row is gone. The table has no company FK.
             $delEntStmt = $centralPdo->prepare('SELECT COUNT(*) FROM deleted_entities WHERE company_id = ?');
             $delEntStmt->execute([$companyId]);
             $deletedEntitiesCount = (int)$delEntStmt->fetchColumn();
-            if ($deletedEntitiesCount > 0) {
-                $centralPdo->prepare('DELETE FROM deleted_entities WHERE company_id = ?')->execute([$companyId]);
-            }
 
             // Delete company_features
             $centralPdo->prepare('DELETE FROM company_features WHERE company_id = ?')->execute([$companyId]);
@@ -137,17 +181,22 @@ final class CompanyDeletionService
             // Delete the company record itself (last)
             $centralPdo->prepare('DELETE FROM companies WHERE id = ?')->execute([$companyId]);
 
+            // The company removal and its durable stage change commit together.
+            CompanyDeletionJournal::advance($centralPdo, $runId, $stage, 'central_deleted');
+
             $centralPdo->commit();
+            $stage = 'central_deleted';
 
             $result['steps'][] = [
                 'step' => 'central_delete',
                 'status' => 'success',
-                'details' => 'companies+company_features+company_users+deleted_entities',
+                'details' => 'companies+company_features+company_users; deleted_entities retained',
             ];
         } catch (\Exception $e) {
             if ($centralPdo->inTransaction()) {
                 $centralPdo->rollBack();
             }
+            CompanyDeletionJournal::fail($centralPdo, $runId, $stage, 'CENTRAL_DELETE_FAILED');
             $msg = 'Ошибка центрального удаления: ' . $e->getMessage();
             $result['steps'][] = ['step' => 'central_delete', 'status' => 'fail', 'error' => $msg];
             $result['errors'][] = $msg;
@@ -156,6 +205,7 @@ final class CompanyDeletionService
         }
 
         // === STEP 4: Verification ===
+        try {
         $verifyErrors = [];
 
         // Verify company record absent
@@ -179,11 +229,11 @@ final class CompanyDeletionService
             $verifyErrors[] = 'Остались записи в company_users для этой компании';
         }
 
-        // Verify no deleted_entities rows
+        // Verify the historical deletion archive survived unchanged.
         $deStmt = $centralPdo->prepare('SELECT COUNT(*) FROM deleted_entities WHERE company_id = ?');
         $deStmt->execute([$companyId]);
-        if ((int)$deStmt->fetchColumn() > 0) {
-            $verifyErrors[] = 'Остались записи в deleted_entities для этой компании';
+        if ((int)$deStmt->fetchColumn() !== $deletedEntitiesCount) {
+            $verifyErrors[] = 'Журнал deleted_entities компании изменился при удалении';
         }
 
         // Verify pool DB was released: company_id=NULL, released_at set, row preserved
@@ -209,11 +259,22 @@ final class CompanyDeletionService
         }
 
         if (!empty($verifyErrors)) {
+            CompanyDeletionJournal::fail($centralPdo, $runId, $stage, 'VERIFICATION_FAILED');
             $result['verification'] = $verifyErrors;
             $result['errors'] = array_merge($result['errors'], $verifyErrors);
             $result['success'] = false;
         } else {
+            CompanyDeletionJournal::advance($centralPdo, $runId, $stage, 'completed');
             $result['verification'] = ['Все проверки пройдены: компания и все связанные данные удалены.'];
+        }
+        } catch (\Throwable $e) {
+            try {
+                CompanyDeletionJournal::fail($centralPdo, $runId, $stage, 'VERIFICATION_QUERY_FAILED');
+            } catch (\Throwable $ignored) {
+                // The prior in-progress stage remains as durable recovery evidence.
+            }
+            $result['success'] = false;
+            $result['errors'][] = 'Не удалось завершить проверку удаления; требуется ручная сверка журнала.';
         }
 
         return $result;
