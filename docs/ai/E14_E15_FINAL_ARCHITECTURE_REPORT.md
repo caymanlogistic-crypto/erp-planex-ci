@@ -101,7 +101,7 @@ These are NOT errors — they are working code. Future refactoring should:
 
 ### Server: `http://127.0.0.1:8017` (PHP built-in)
 
-### Owner (owner_test_runtime / test1234)
+### Owner (owner_test_runtime / [удалено])
 | Check | Result |
 |-------|--------|
 | Dashboard | 200 OK |
@@ -130,7 +130,7 @@ These are NOT errors — they are working code. Future refactoring should:
 | Dashboard | 200 OK |
 | Route Executors | 200 OK |
 
-### Superadmin (admin@planex.local / test1234)
+### Superadmin (admin@planex.local / [удалено])
 | Check | Result |
 |-------|--------|
 | Companies list | 200 OK |

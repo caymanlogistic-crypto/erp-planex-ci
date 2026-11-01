@@ -1,5 +1,7 @@
 # ERP PLANEX — финальный архив для внешней ревизии
 
+> Исторический архив. Не используйте описанные здесь доступы и команды для текущей ERP; действующий порядок работы указан в `AGENTS.md` и `C:\plan-ex\ERP-PLANEX\LOCAL-DEVELOPMENT.md`.
+
 ## Назначение
 
 Финальный handoff-архив ERP PLANEX. Передан на внешнюю ревью архитектуры, кода и документации.
@@ -57,7 +59,7 @@ php -S localhost:8017 -t public public/index.php
 
 | Роль | Логин | Пароль |
 |------|-------|--------|
-| Owner | `owner_test_runtime` | `test1234` |
+| Owner | `owner_test_runtime` | `[удалено]` |
 | Senior Logist | `senior_runtime_1` | `senior1234` |
-| Logist | `logist_runtime_1` | `pass1111` |
-| Superadmin | `admin@planex.local` | `test1234` |
+| Logist | `logist_runtime_1` | `[удалено]` |
+| Superadmin | `admin@planex.local` | `[удалено]` |
