@@ -149,9 +149,15 @@ $port=(int)(getenv('PLANEX_SCHEMA_DB_PORT')?:3306);
 $user=getenv('PLANEX_SCHEMA_DB_USER')?:'planex_ci';
 $pass=getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'planex_ci';
 $admin=new \PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION,\PDO::ATTR_EMULATE_PREPARES=>false]);
-$dbName='planex_feo_cost_'.getmypid().'_'.bin2hex(random_bytes(3));
+$fixedDb=trim((string)getenv('PLANEX_TEST_FIXED_DB'));
+$ownsDatabase=$fixedDb==='';
+if(!$ownsDatabase){
+    $allowed=trim((string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'));
+    $must(getenv('APP_ENV')==='test'&&preg_match('/^planex_t_[a-f0-9]{24}$/D',$fixedDb)===1&&$allowed===$fixedDb,'unique guarded test database required');
+}
+$dbName=$ownsDatabase?'planex_feo_cost_'.getmypid().'_'.bin2hex(random_bytes(3)):$fixedDb;
 $quotedDb='`'.str_replace('`','``',$dbName).'`';
-$admin->exec("CREATE DATABASE {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+if($ownsDatabase)$admin->exec("CREATE DATABASE {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 
 try {
     $pdo=new \PDO("mysql:host={$host};port={$port};dbname={$dbName};charset=utf8mb4",$user,$pass,[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION,\PDO::ATTR_EMULATE_PREPARES=>false]);
@@ -332,5 +338,8 @@ try {
     echo "FEO_REQUEST_COSTS_MYSQL=PASS\n";
     echo "FEO_REQUEST_COSTS_REGRESSION=PASS\n";
 } finally {
-    $admin->exec("DROP DATABASE IF EXISTS {$quotedDb}");
+    if($ownsDatabase)$admin->exec("DROP DATABASE IF EXISTS {$quotedDb}");
+    elseif(isset($pdo)&&$pdo instanceof \PDO){
+        foreach(['feo_request_cost_block_requests','feo_request_cost_blocks','feo_placement_current','feo_requests'] as $table)$pdo->exec("DROP TABLE IF EXISTS `{$table}`");
+    }
 }
