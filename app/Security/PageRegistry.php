@@ -68,7 +68,7 @@ final class PageRegistry
             self::definition('company.feo.costs', 'Стоимость заявок', 'Операции', 'Заявки ФЭО', 61, '/company/feo/requests/costs', badgeProvider: 'feo_cost_problem', badgeDisplay: 'self_parent'),
             self::definition('company.feo.map', 'Карта', 'Операции', 'Заявки ФЭО', 70, '/company/feo/requests/map', badgeProvider: 'feo_map_problem', badgeDisplay: 'self_parent'),
             self::definition('company.feo.map_placement', 'Размещение на карте', 'Операции', 'Заявки ФЭО', 60, '/company/feo/requests/map-placement', badgeProvider: 'feo_placement_problem', badgeDisplay: 'self_parent'),
-            self::definition('company.feo.utilizers', 'Утилизаторы', 'Операции', 'Заявки ФЭО', 80, '/company/feo/utilizers', badgeProvider: 'feo_utilizer_problem', badgeDisplay: 'self_parent'),
+            self::definition('company.feo.utilizers', 'Утилизаторы', 'Операции', 'Заявки ФЭО', 80, '/company/feo/utilizers', badgeProvider: 'feo_utilizer_problem', badgeDisplay: 'self_parent', ownerOnly: true),
             self::definition('company.feo.transfers', 'Перемещение заявок', 'Операции', 'Заявки ФЭО', 62, '/company/feo/requests/transfers'),
             self::definition('company.feo.weights', 'Изменение веса', 'Операции', 'Заявки ФЭО', 63, '/company/feo/requests/weights'),
             self::definition('company.feo.coordinates', 'Определение координат', 'Операции', 'Заявки ФЭО', 64, '/company/feo/requests/coordinates'),
