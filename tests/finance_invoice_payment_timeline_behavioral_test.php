@@ -2,12 +2,25 @@
 
 declare(strict_types=1);
 
-$fixturePdo = new PDO(
-    'mysql:host=127.0.0.1;port=3306;dbname=erp_obligations_test;charset=utf8mb4',
-    'root',
-    'root',
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$fixtureDsn = trim((string)getenv('PLANEX_FINANCE_TEST_DSN'));
+$fixtureUser = trim((string)getenv('PLANEX_FINANCE_TEST_USER'));
+$fixturePassword = (string)getenv('PLANEX_FINANCE_TEST_PASSWORD');
+if ($fixtureDsn === '' || $fixtureUser === '' || $fixturePassword === '') {
+    throw new RuntimeException('Explicit finance test database credentials are required.');
+}
+$fixedDb = trim((string)getenv('PLANEX_TEST_FIXED_DB'));
+if ($fixedDb !== '') {
+    $expectedDsn = 'mysql:host=' . getenv('PLANEX_SCHEMA_DB_HOST') . ';port=' . getenv('PLANEX_SCHEMA_DB_PORT')
+        . ';dbname=' . $fixedDb . ';charset=utf8mb4';
+    if (getenv('APP_ENV') !== 'test'
+        || !in_array($fixedDb, array_filter(array_map('trim', explode(',', (string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')))), true)
+        || $fixtureDsn !== $expectedDsn
+        || $fixtureUser !== getenv('PLANEX_SCHEMA_DB_USER')
+        || $fixturePassword !== getenv('PLANEX_SCHEMA_DB_PASSWORD')) {
+        throw new RuntimeException('Finance test database does not match the guarded local lease.');
+    }
+}
+$fixturePdo = new PDO($fixtureDsn, $fixtureUser, $fixturePassword, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $fixturePdo->exec('DROP TABLE IF EXISTS bank_transactions');
 unset($fixturePdo);
 
