@@ -45,7 +45,7 @@ $assert(str_contains($legacy, 'public static function deleteTransfer'), 'histori
 $assert(str_contains($route, "FinanceEmployeeDirectActions/transfer_submit.php"), 'new transfer route must use direct create action');
 $assert(str_contains($route, "FinanceEmployeeDirectActions/transfer_update.php"), 'transfer update must dispatch by actual transfer architecture');
 $assert(str_contains($route, "FinanceEmployeeDirectActions/transfer_cancel.php"), 'transfer delete must dispatch by actual transfer architecture');
-$assert(!str_contains($route, "[$controller, 'transferSubmit']"), 'active create route must not call legacy transfer controller');
+$assert(!str_contains($route, '[$controller, \'transferSubmit\']'), 'active create route must not call legacy transfer controller');
 
 $assert(str_contains($view, 'id="employee-transfer-open"'), 'page header must expose approved transfer button');
 $assert(str_contains($view, '>Передать деньги</button>'), 'transfer action uses approved label');
