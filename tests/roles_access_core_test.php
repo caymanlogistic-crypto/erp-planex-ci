@@ -155,6 +155,18 @@ expect($access->canAccessPage('company.clients'), 'Ordinary grantable page unexp
 expect(!$access->canAccessPage('company.responsible_assignments'), 'Owner-only responsibility tool accepted ordinary role grant.');
 expect(!$access->canAccessPage('company.roles_access'), 'Owner-only roles-access page accepted ordinary override.');
 
+$utilizersPage = $registry->page('company.feo.utilizers');
+expect(($utilizersPage['owner_only'] ?? false) === true, 'FEO utilizer administration must be owner-only.');
+expect(($utilizersPage['grantable'] ?? true) === false, 'FEO utilizer administration must not be grantable.');
+expect(!in_array('company.feo.utilizers', $registry->grantablePageKeys(), true), 'FEO utilizer administration leaked into the role matrix.');
+$provider->snapshot = memberSnapshot(
+    ['company.feo.utilizers'],
+    ['company.feo.utilizers' => 'allow'],
+    []
+);
+$access = $resolver->resolve(new AccessRequestContext(4, 7));
+expect(!$access->canAccessPage('company.feo.utilizers'), 'FEO utilizer administration accepted a stale role grant or personal override.');
+
 $provider->snapshot = memberSnapshot([], ['unknown.page' => 'allow'], ['client' => 'invalid']);
 $access = $resolver->resolve(new AccessRequestContext(4, 7));
 expect(!$access->canAccessPage('unknown.page'), 'Unknown page key must fail closed.');
@@ -165,6 +177,7 @@ $owner = $resolver->resolve(new AccessRequestContext(4, 7));
 expect($owner->isSystemOwner(), 'System owner key must identify owner.');
 expect($owner->compatibilityRoleCode() === 'company_owner', 'Owner compatibility role must derive from system ownership.');
 expect($owner->canAccessPage('company.finance.dashboard'), 'Owner must have every registered page.');
+expect($owner->canAccessPage('company.feo.utilizers'), 'Owner must retain FEO utilizer administration.');
 expect($owner->canAccessPage('company.driver_ts_data'), 'Owner must keep driver and vehicle data access.');
 expect($owner->dataScope('waste_trip') === 'all', 'Owner must have all regulated data.');
 
