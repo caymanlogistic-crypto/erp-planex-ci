@@ -8,6 +8,7 @@ permissions:
 
 env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  SERVER_ROOT: /home/s/spugovxsim/planexp
   ARCHIVE_URL: https://downloadarchive.documentfoundation.org/libreoffice/old/7.1.8.1/deb/x86_64/LibreOffice_7.1.8.1_Linux_x86-64_deb.tar.gz
   ARCHIVE_SHA256: 4468b0f4edd40e74c086c7d264475136fabc0760ee702cf8ea1662a4ca94201d
 
@@ -58,11 +59,11 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          probe="/tmp/logist_pdf_probe_${GITHUB_RUN_ID}"
+          probe="$SERVER_ROOT/deploy/logist_pdf_probe_${GITHUB_RUN_ID}"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "mkdir -m 700 '$probe'"
           echo 'PROBE_STAGE=remote-dir-created'
           cleanup() {
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "case '$probe' in /tmp/logist_pdf_probe_[0-9]*) rm -rf -- '$probe' ;; *) exit 1 ;; esac" || true
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "case '$probe' in '$SERVER_ROOT'/deploy/logist_pdf_probe_[0-9]*) rm -rf -- '$probe' ;; *) exit 1 ;; esac" || true
           }
           trap cleanup EXIT
           scp -P "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
@@ -71,10 +72,12 @@ jobs:
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PROBE='$probe' bash -se" <<'REMOTE'
           set -euo pipefail
           echo 'PROBE_STAGE=remote-start'
-          test "$PROBE" = "/tmp/logist_pdf_probe_${PROBE##*_}"
+          test "$PROBE" = "/home/s/spugovxsim/planexp/deploy/logist_pdf_probe_${PROBE##*_}"
           tar -xzf "$PROBE/converter-probe.tar.gz" -C "$PROBE"
           echo 'PROBE_STAGE=remote-extracted'
           binary="$PROBE/opt/libreoffice7.1/program/soffice"
+          ls -ld "$PROBE" "$PROBE/opt/libreoffice7.1/program" "$binary"
+          readlink -f "$binary" || true
           test -x "$binary"
           echo 'PROBE_STAGE=binary-executable'
           if ! "$binary" --version; then
