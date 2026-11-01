@@ -294,9 +294,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ce7d6c86ee634958d4581f50cc7ae8ba2689fc81",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ce7d6c86ee634958d4581f50cc7ae8ba2689fc81/tests/feo_transfers_mysql_test.php",
-      "verification_note": "2026-10-26: single weight block MAX apply/revert exact Markdown changed; manual/import paths and custom templates retain prior text. Isolated transfer MySQL (1516 assertions) covers manual and import events, NULL versus zero, and exact single and historical multi messages. No real MAX send.",
+      "verified_sha": "204345fde86eb0e644b05ae68b88ea439ca8fd41",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/204345fde86eb0e644b05ae68b88ea439ca8fd41/tests/feo_import_history_role_guard_test.php",
+      "verification_note": "2026-11-01: OWNER confirmed import-history rollback, restore and delete are restricted to company_owner and senior_logist. All three controller POST actions now check the current effective access role before DB work, including when the page itself is grantable. Focused guard test verifies owner/senior allow, granted logist/custom and technical superadmin deny, and no DB access on the three denied actions. FEO requests contract and 256-route access integration PASS. Earlier import/XA/MAX evidence remains scoped historical provenance; this role correction does not claim production import/rollback acceptance.",
       "owning_paths": [
         "app/Service/FeoRequestService.php",
         "app/Service/FeoRequestInteractionService.php",
