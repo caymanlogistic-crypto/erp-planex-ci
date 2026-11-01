@@ -82,7 +82,7 @@ These 3 route files use inline closures instead of controllers:
 |------|-------|----------|
 | `company_dashboard.php` | 240 | Dashboard + access grants CRUD |
 | `company_logists.php` | 960 | Full logist CRUD (create, edit, view, reset password, archive) |
-| `superadmin_company_delete.php` | 445 | Full company delete flow with backup |
+| `superadmin_company_delete.php` | 445 | Permanent company delete route; the former "with backup" description was inaccurate before the guarded backup/journal change |
 
 These are NOT errors — they are working code. Future refactoring should:
 1. Extract DashboardController, LogistController, CompanyDeleteController

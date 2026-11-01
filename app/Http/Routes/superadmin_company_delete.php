@@ -235,7 +235,7 @@ $router->post('/superadmin/companies/{id}/delete', function ($id) use ($config, 
     }
 
     // === EXECUTE DELETION via service ===
-    $result = \App\Service\CompanyDeletionService::delete($pdo, $company, $config);
+    $result = \App\Service\CompanyDeletionService::delete($pdo, $company, $config, (int)($_SESSION['user_id'] ?? 0));
 
     if ($result['success']) {
         header('Location: /superadmin/companies?deleted=' . $companyId);

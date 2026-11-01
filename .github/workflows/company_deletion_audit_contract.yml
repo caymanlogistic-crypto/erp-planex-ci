@@ -1,0 +1,83 @@
+name: Company Deletion Audit Contract
+
+on:
+  pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
+    paths:
+      - 'app/Service/CompanyDeletion*.php'
+      - 'app/Http/Routes/superadmin_company_delete.php'
+      - 'app/Support/company_database.php'
+      - 'database/migrations/021_company_deletion_runs.sql'
+      - 'scripts/company_deletion_seal_backup_manifest.php'
+      - 'tests/company_deletion_*'
+      - '.github/workflows/company_deletion_audit_contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax and manifest verification
+        run: |
+          php -l app/Service/CompanyDeletionBackupVerifier.php
+          php -l app/Service/CompanyDeletionJournal.php
+          php -l app/Service/CompanyDeletionService.php
+          php -l app/Http/Routes/superadmin_company_delete.php
+          php -l scripts/company_deletion_seal_backup_manifest.php
+          php tests/company_deletion_backup_verifier_test.php
+      - name: Create isolated restricted MySQL fixtures
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot <<'SQL'
+          CREATE DATABASE planex_cd_journal_test CHARACTER SET utf8mb4;
+          CREATE DATABASE planex_cd_central_test CHARACTER SET utf8mb4;
+          CREATE DATABASE planex_cd_tenant_test CHARACTER SET utf8mb4;
+          CREATE USER 'px_cd_journal'@'%' IDENTIFIED BY 'ci_fixture_journal';
+          CREATE USER 'px_cd_central'@'%' IDENTIFIED BY 'ci_fixture_central';
+          CREATE USER 'px_cd_tenant'@'%' IDENTIFIED BY 'ci_fixture_tenant';
+          GRANT ALL PRIVILEGES ON planex_cd_journal_test.* TO 'px_cd_journal'@'%';
+          GRANT ALL PRIVILEGES ON planex_cd_central_test.* TO 'px_cd_central'@'%';
+          GRANT ALL PRIVILEGES ON planex_cd_tenant_test.* TO 'px_cd_tenant'@'%';
+          SQL
+      - name: Journal and fail-closed preflight
+        env:
+          APP_ENV: test
+          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+          PLANEX_SCHEMA_DB_PORT: '3306'
+          PLANEX_SCHEMA_DB_USER: px_cd_journal
+          PLANEX_SCHEMA_DB_PASSWORD: ci_fixture_journal
+          PLANEX_TEST_FIXED_DB: planex_cd_journal_test
+          PLANEX_TEST_FIXED_DB_ALLOWLIST: planex_cd_journal_test
+          PLANEX_TEST_DB_LEASE: planex_cd_journal_test
+        run: php tests/company_deletion_journal_mysql_test.php
+      - name: Two-schema lifecycle and failed retry
+        env:
+          APP_ENV: test
+          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+          PLANEX_SCHEMA_DB_PORT: '3306'
+          PLANEX_SCHEMA_DB_USER: px_cd_tenant
+          PLANEX_SCHEMA_DB_PASSWORD: ci_fixture_tenant
+          PLANEX_TEST_FIXED_DB: planex_cd_tenant_test
+          PLANEX_TEST_FIXED_DB_ALLOWLIST: planex_cd_tenant_test
+          PLANEX_TEST_DB_LEASE: planex_cd_tenant_test
+          PLANEX_DELETE_TEST_CENTRAL_DB: planex_cd_central_test
+          PLANEX_DELETE_TEST_CENTRAL_LEASE: planex_cd_central_test
+          PLANEX_DELETE_TEST_CENTRAL_USER: px_cd_central
+          PLANEX_DELETE_TEST_CENTRAL_PASSWORD: ci_fixture_central
+        run: php tests/company_deletion_isolated_mysql_test.php
