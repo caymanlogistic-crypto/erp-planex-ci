@@ -8,8 +8,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "5402a546e29691793b1ceeb0a48d2472f68a681e",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5402a546e29691793b1ceeb0a48d2472f68a681e/.github/workflows/erpv2_agent_deploy_request.yml",
+      "verified_sha": "13c9793f6d113190ad1ea4befbb0f7bc95e00c4b",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/13c9793f6d113190ad1ea4befbb0f7bc95e00c4b/tests/agent_deploy_policy_contract_test.py",
+      "verification_note": "2026-11-01: control.deploy machine scope now includes the guarded FAST release workflow and its local policy contract. Agent request and controlled deploy files did not change since prior verification; FAST changes in the expanded scope were reviewed against current policy. Local agent_deploy_policy_contract_test.py and agent_deploy_request_contract_test.php passed on exact implementation SHA; no production DB write path was added.",
       "owning_paths": [
         ".github/workflows/erpv2_agent_deploy_request.yml",
         ".github/workflows/erpv2_controlled_deploy.yml",
