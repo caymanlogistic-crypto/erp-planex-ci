@@ -1,0 +1,85 @@
+name: Logist Contracts Converter Temporary Probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  ARCHIVE_URL: https://downloadarchive.documentfoundation.org/libreoffice/old/7.1.8.1/deb/x86_64/LibreOffice_7.1.8.1_Linux_x86-64_deb.tar.gz
+  ARCHIVE_SHA256: 4468b0f4edd40e74c086c7d264475136fabc0760ee702cf8ea1662a4ca94201d
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Verify exact canonical and prepare pinned converter
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
+          curl -fL --retry 3 --connect-timeout 20 --max-time 600 -o "$RUNNER_TEMP/lo.tar.gz" "$ARCHIVE_URL"
+          echo "$ARCHIVE_SHA256  $RUNNER_TEMP/lo.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/lo-pkg" "$RUNNER_TEMP/lo-root"
+          tar -xzf "$RUNNER_TEMP/lo.tar.gz" -C "$RUNNER_TEMP/lo-pkg"
+          while IFS= read -r -d '' deb; do dpkg-deb -x "$deb" "$RUNNER_TEMP/lo-root"; done < <(find "$RUNNER_TEMP/lo-pkg" -name '*.deb' -print0)
+          test -x "$RUNNER_TEMP/lo-root/opt/libreoffice7.1/program/soffice"
+          "$RUNNER_TEMP/lo-root/opt/libreoffice7.1/program/soffice" --version
+          python3 - <<'PY'
+          import base64,glob,os
+          parts=sorted(glob.glob('resources/document-templates/contract_vehicle_lease_crew_v9.docx.b64.part*'))
+          if len(parts)<2: raise SystemExit('Built-in contract parts missing')
+          with open(os.environ['RUNNER_TEMP']+'/sample.docx','wb') as out:
+              for part in parts: out.write(base64.b64decode(open(part,'rb').read(),validate=True))
+          PY
+          tar -C "$RUNNER_TEMP/lo-root" -czf "$RUNNER_TEMP/converter-probe.tar.gz" opt/libreoffice7.1
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/logist_converter_probe_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/logist_converter_probe_key" "$HOME/.ssh/known_hosts"
+      - name: Smoke test inside bounded temporary server directory
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          probe="/tmp/logist_pdf_probe_${GITHUB_RUN_ID}"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "mkdir -m 700 '$probe'"
+          cleanup() {
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "case '$probe' in /tmp/logist_pdf_probe_[0-9]*) rm -rf -- '$probe' ;; *) exit 1 ;; esac" || true
+          }
+          trap cleanup EXIT
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/converter-probe.tar.gz" "$RUNNER_TEMP/sample.docx" "$SSH_USER@$SSH_HOST:$probe/"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/logist_converter_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PROBE='$probe' bash -se" <<'REMOTE'
+          set -euo pipefail
+          test "$PROBE" = "/tmp/logist_pdf_probe_${PROBE##*_}"
+          tar -xzf "$PROBE/converter-probe.tar.gz" -C "$PROBE"
+          binary="$PROBE/opt/libreoffice7.1/program/soffice"
+          test -x "$binary"
+          "$binary" --version
+          mkdir -m 700 "$PROBE/home"
+          HOME="$PROBE/home" timeout 120 "$binary" "-env:UserInstallation=file://$PROBE/profile" --headless --convert-to pdf:writer_pdf_Export --outdir "$PROBE" "$PROBE/sample.docx"
+          test -s "$PROBE/sample.pdf"
+          test "$(head -c 5 "$PROBE/sample.pdf")" = '%PDF-'
+          printf 'LOGIST_CONVERTER_TEMP_PROBE=PASS pdf_bytes=%s\n' "$(stat -c %s "$PROBE/sample.pdf")"
+          REMOTE
+      - name: Remove task key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/logist_converter_probe_key"
