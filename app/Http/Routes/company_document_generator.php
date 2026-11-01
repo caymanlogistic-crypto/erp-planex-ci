@@ -19,3 +19,14 @@ $router->get('/company/document-generator/templates', [$documentGeneratorControl
 $router->post('/company/document-generator/templates/upload', [$documentGeneratorController, 'uploadTemplate'], $documentTemplatesPage);
 $router->post('/company/document-generator/templates/{id}/status', [$documentGeneratorController, 'toggleTemplate'], $documentTemplatesPage);
 $router->get('/company/document-generator/templates/{templateId}/versions/{versionId}/download', [$documentGeneratorController, 'downloadTemplateVersion'], $documentTemplatesPage);
+
+require_once base_path('app/Service/LogistContractService.php');
+require_once base_path('app/Http/Controllers/Company/LogistContractController.php');
+$logistContractController = new \App\Http\Controllers\Company\LogistContractController($config, $db);
+$router->get('/company/logistics/contracts', [$logistContractController, 'index'], 'company.logistics.contracts');
+$router->get('/company/document-generator/logist-contracts', [$logistContractController, 'ownerIndex'], 'company.documents.logist_contracts');
+$router->post('/company/logistics/contracts/prepare', [$logistContractController, 'prepare'], 'company.logistics.contracts');
+$router->post('/company/logistics/contracts/create', [$logistContractController, 'create'], 'company.logistics.contracts');
+$router->get('/company/logistics/contracts/{id}', [$logistContractController, 'detail'], 'company.logistics.contracts');
+$router->get('/company/logistics/contracts/{id}/download', [$logistContractController, 'download'], 'company.logistics.contracts');
+$router->post('/company/document-generator/logist-contracts/{id}/review', [$logistContractController, 'review'], 'company.documents.logist_contracts');

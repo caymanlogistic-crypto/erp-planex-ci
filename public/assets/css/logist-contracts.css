@@ -1,0 +1,8 @@
+.logist-contract-table col:nth-child(1){width:112px}
+.logist-contract-table col:nth-child(2){width:240px}
+.logist-contract-table col:nth-child(3){width:140px}
+.logist-contract-table col:nth-child(4){width:165px}
+.logist-contract-table col:nth-child(5){width:175px}
+.logist-contract-table col:nth-child(6){width:110px}
+.logist-contract-table col:nth-child(7){width:100px}
+.logist-contract-table.is-owner col:nth-child(8){width:120px}

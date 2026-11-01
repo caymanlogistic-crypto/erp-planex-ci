@@ -156,6 +156,14 @@
 .registry-ui-data .registry-ui-value {min-width:0;max-width:100%}
 .registry-ui-data tbody td {background:#fafaf6;font:500 12px/16.8px var(--font);color:#131210}
 .registry-ui-data tbody tr:is(:hover,:focus-within) > td {background:#ece9e2}
+/* Approved logistics contract registry keeps row backgrounds unchanged on pointer hover. */
+.registry-ui-data.logist-contract-table {width:100%;min-width:1040px}
+.registry-ui-data.logist-contract-table.is-owner {min-width:1160px}
+.registry-ui-data.logist-contract-table tbody tr:is(:hover,:focus-within)>td {background:#fafaf6}
+.registry-ui-data.logist-contract-table tbody tr.registry-ui-warning:is(:hover,:focus-within)>td {background:#fdf0d5}
+.registry-ui-data.logist-contract-table tbody td {transition:none}
+.registry-ui-data.logist-contract-table tbody tr:focus {outline:0}
+.registry-ui-data.logist-contract-table tbody tr:focus-visible>td:first-child {box-shadow:inset 2px 0 0 #9a5a22}
 .registry-ui-data :is(col,th,td).registry-ui-id {width:var(--registry-id-width);min-width:var(--registry-id-width);white-space:nowrap;color:#131210;font:700 12px/16.8px var(--font);font-variant-numeric:tabular-nums;overflow:visible}
 .registry-ui-data :is(col,th,td).registry-ui-trip-cell {width:240px;min-width:240px}
 .registry-ui-data .registry-ui-trip {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 12px/16.8px var(--font);color:#131210}

@@ -133,6 +133,11 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
+          if test -f app/Service/LogistContractPdfService.php; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+              "command -v libreoffice >/dev/null && /usr/bin/php8.5 -r 'exit(function_exists(\"proc_open\") && class_exists(\"ZipArchive\") && class_exists(\"DOMDocument\") ? 0 : 1);'"
+            echo 'LOGIST_CONTRACT_PDF_PRODUCTION_CAPABILITY=PASS'
+          fi
           scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" \
             /tmp/P21_readonly_db_fingerprint.php "$SSH_USER@$SSH_HOST:/tmp/P21_readonly_db_fingerprint_${GITHUB_RUN_ID}.php"
           out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "GITHUB_RUN_ID='$GITHUB_RUN_ID' bash -se" <<'REMOTE'

@@ -325,6 +325,30 @@
   ],
   "pages": [
     {
+      "id": "logist-contracts",
+      "family": "registry",
+      "adaptation_status": "current_20261018",
+      "route": "/erpv2/company/logistics/contracts",
+      "view": "app/View/pages/company_logist_contracts.php",
+      "asset_owner": "app/View/pages/company_logist_contracts.php",
+      "header_icon": {
+        "variant": "outline",
+        "source": "app/View/components/tabler/outline/file-text.svg",
+        "version": "3.48.0",
+        "name": "file-text",
+        "role": "registry.page-head",
+        "pack": "@tabler/icons"
+      },
+      "reference_select": false,
+      "sticky": false,
+      "data_roles": ["id", "trip", "secondary", "missing"],
+      "table_surfaces": [{"id":"main","selector":".registry-ui-card > .table-scroll > table","row_selector":"tbody > tr:not(:has(td[colspan]))"}],
+      "table_states": [{"id":"initial","visible":["main"],"data":{"main":"populated"}}],
+      "async_search": {"applicable": false, "reason": "Поиск фильтрует загруженные договоры локально."},
+      "contract_sources": ["app/View/pages/company_logist_contracts.php", "public/assets/js/logist-contracts.js", "app/Service/LogistContractService.php"],
+      "required_contracts": []
+    },
+    {
       "id": "route-executors",
       "family": "registry",
       "route": "/erpv2/company/route-executors",
