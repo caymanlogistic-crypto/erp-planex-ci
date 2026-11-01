@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Security\AccessRuntime;
 use App\Service\FeoPlacementAuthorService;
 use App\Service\FeoRequestInteractionService;
 use App\Service\FeoRequestService;
@@ -228,6 +229,7 @@ final class FeoRequestsController
 
     public function rollbackImport(): void
     {
+        if (!$this->guardImportHistoryRole()) return;
         try {
             [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -249,6 +251,7 @@ final class FeoRequestsController
 
     public function restoreImport(): void
     {
+        if (!$this->guardImportHistoryRole()) return;
         try {
             [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -270,6 +273,7 @@ final class FeoRequestsController
 
     public function deleteImport(): void
     {
+        if (!$this->guardImportHistoryRole()) return;
         try {
             [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -289,6 +293,20 @@ final class FeoRequestsController
             $_SESSION['flash_error'] = 'Удаление загрузки ФЭО не выполнено: ' . $e->getMessage();
         }
         redirect_to('/company/feo/requests');
+    }
+
+    private function guardImportHistoryRole(): bool
+    {
+        $access = AccessRuntime::current();
+        if ($access->isActive()
+            && !$access->isTechnicalSuperadmin()
+            && ($access->isSystemOwner() || $access->compatibilityRoleCode() === 'senior_logist')) {
+            return true;
+        }
+
+        http_response_code(403);
+        echo 'Доступ запрещён';
+        return false;
     }
 
     private function detailPayload(array $row): array
