@@ -49,8 +49,8 @@ $assert = static function (bool $ok, string $message): void { if (!$ok) throw ne
 try {
     [$code,$out] = $run();
     $assert($code === 0 && str_contains($out, '"ready":false'), 'Read-only preflight did not report absent table');
-    [$code] = $run(['COMPANY_DELETION_021_MODE' => 'apply']);
-    $assert($code !== 0, 'Apply without confirmation was accepted');
+    [$code,,$err] = $run(['COMPANY_DELETION_021_MODE' => 'apply']);
+    $assert($code !== 0 && trim($err) === 'COMPANY_DELETION_021_FAILED_PREFLIGHT', 'Apply without confirmation was accepted or leaked details');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='company_deletion_runs'")->fetchColumn() === 0, 'Unconfirmed apply mutated schema');
     [$code,$out,$err] = $run(['COMPANY_DELETION_021_MODE' => 'apply', 'COMPANY_DELETION_021_CONFIRM' => 'APPLY_COMPANY_DELETION_021']);
     $assert($code === 0 && str_contains($out, 'COMPANY_DELETION_021_APPLY_OK'), 'Guarded apply failed: ' . $err);
@@ -60,8 +60,14 @@ try {
         && (int)$pdo->query('SELECT COUNT(*) FROM deleted_entities')->fetchColumn() === 1
         && (int)$pdo->query('SELECT COUNT(*) FROM company_deletion_runs')->fetchColumn() === 0, 'Business data or runs changed');
     file_put_contents($marker, str_repeat('b', 40));
-    [$code] = $run(['COMPANY_DELETION_021_MODE' => 'apply', 'COMPANY_DELETION_021_CONFIRM' => 'APPLY_COMPANY_DELETION_021']);
-    $assert($code !== 0, 'Stale deployed marker was accepted');
+    [$code,,$err] = $run(['COMPANY_DELETION_021_MODE' => 'apply', 'COMPANY_DELETION_021_CONFIRM' => 'APPLY_COMPANY_DELETION_021']);
+    $assert($code !== 0 && trim($err) === 'COMPANY_DELETION_021_FAILED_PREFLIGHT', 'Stale deployed marker was accepted or leaked details');
+    file_put_contents($marker, $sha);
+    $badConfig = $config;
+    $badConfig['database']['password'] = 'invalid_test_password';
+    file_put_contents($root . '/bootstrap/app.php', '<?php return ' . var_export($badConfig, true) . ';');
+    [$code,,$err] = $run();
+    $assert($code !== 0 && trim($err) === 'COMPANY_DELETION_021_FAILED_DB_CONNECT', 'Database error leaked connection details');
     echo "COMPANY_DELETION_021_MIGRATION_MYSQL=PASS\n";
 } finally {
     foreach ([$marker, $migrationDir . '/021_company_deletion_runs.sql', $root . '/bootstrap/app.php', $root . '/.env'] as $path) {

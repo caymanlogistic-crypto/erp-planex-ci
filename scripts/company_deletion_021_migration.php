@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 // Task-specific central schema change. No company or backup data is modified.
 if (PHP_SAPI !== 'cli') exit(1);
+$phase = 'PREFLIGHT';
 try {
     $root = rtrim((string)getenv('PLANEX_ROOT'), '/');
     $sourceSha = (string)getenv('PLANEX_SOURCE_SHA');
@@ -28,6 +29,7 @@ try {
     if ($apply && getenv('COMPANY_DELETION_021_CONFIRM') !== 'APPLY_COMPANY_DELETION_021') {
         throw new RuntimeException('Explicit migration confirmation required');
     }
+    $phase = 'DB_CONNECT';
     $config = require $root . '/bootstrap/app.php';
     $db = $config['database'];
     $pdo = new PDO(
@@ -35,6 +37,7 @@ try {
         $db['username'], $db['password'],
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false]
     );
+    $phase = 'SCHEMA_CHECK';
     $lock = $pdo->prepare('SELECT GET_LOCK(?,10)');
     $lock->execute(['planex_migrate_central_021']);
     if ((int)$lock->fetchColumn() !== 1) throw new RuntimeException('Central migration lock unavailable');
@@ -59,10 +62,12 @@ try {
             throw new RuntimeException('Unjournaled or missing company deletion journal table');
         }
         if ($apply && !$tablePresent) {
+            $phase = 'APPLY';
             $pdo->exec($sql);
             $pdo->prepare('INSERT INTO schema_migrations(migration,checksum) VALUES(?,?)')->execute([$name, $checksum]);
             $tablePresent = true;
         }
+        $phase = 'POSTCHECK';
         if ($tablePresent) {
             $columns = $pdo->query("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='company_deletion_runs'")
                 ->fetchAll(PDO::FETCH_COLUMN);
@@ -85,6 +90,7 @@ try {
         $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute(['planex_migrate_central_021']);
     }
 } catch (Throwable $error) {
-    fwrite(STDERR, 'COMPANY_DELETION_021_FAILED: ' . $error->getMessage() . "\n");
+    // Production connector and schema exception details must not reach Actions logs.
+    fwrite(STDERR, 'COMPANY_DELETION_021_FAILED_' . $phase . "\n");
     exit(1);
 }
