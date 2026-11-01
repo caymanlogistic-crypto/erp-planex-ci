@@ -17,7 +17,7 @@
   const formError = root.querySelector('[data-form-error]');
   const pageError = root.querySelector('[data-page-error]');
   const detailError = root.querySelector('[data-detail-error]');
-  const showPageError = message => { pageError.textContent = message; pageError.hidden = false; };
+  const showPageError = message => { pageError.textContent = message; pageError.hidden = false; pageError.classList.remove('is-hidden'); };
   function updatePendingBadges(delta) {
     if (!owner || delta === 0) return;
     if (!document.querySelector('[data-badge-provider="logist_contracts_pending"]')) {
@@ -90,7 +90,7 @@
     form.elements.price.value = '';
   }
   async function openForm(previous = null) {
-    pageError.hidden = true;
+    pageError.hidden = true; pageError.classList.add('is-hidden');
     formError.hidden = true;
     form.reset();
     const button = root.querySelector('[data-create]');
@@ -120,7 +120,7 @@
     } finally { button.disabled = false; }
   }
   async function openDetail(id) {
-    pageError.hidden = true;
+    pageError.hidden = true; pageError.classList.add('is-hidden');
     detailError.hidden = true;
     try {
       const result = await api(root.dataset.detailBase+'/'+id);
