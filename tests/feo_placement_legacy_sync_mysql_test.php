@@ -19,13 +19,33 @@ $pdo = new PDO(
     getenv('PLANEX_SCHEMA_DB_PASSWORD'),
     [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]
 );
+$legacyDatabase = trim((string)getenv('PLANEX_TEST_LEGACY_DB')) ?: $database;
+if (!preg_match('/^[a-zA-Z0-9_]+$/D', $legacyDatabase) || !in_array($legacyDatabase, $allowed, true)) {
+    throw new RuntimeException('Guarded legacy test database is required.');
+}
+if ($legacyDatabase !== $database && trim((string)getenv('PLANEX_TEST_LEGACY_USER')) === '') {
+    throw new RuntimeException('A separate legacy account is required for the two-schema fixture.');
+}
+$legacyPdo = $legacyDatabase === $database ? $pdo : new PDO(
+    'mysql:host=' . getenv('PLANEX_SCHEMA_DB_HOST') . ';port=' . (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306)
+    . ';dbname=' . $legacyDatabase . ';charset=utf8mb4',
+    getenv('PLANEX_TEST_LEGACY_USER') ?: getenv('PLANEX_SCHEMA_DB_USER'),
+    getenv('PLANEX_TEST_LEGACY_PASSWORD') ?: getenv('PLANEX_SCHEMA_DB_PASSWORD'),
+    [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]
+);
 $count = 0;
 $ok = static function(bool $value, string $message) use (&$count): void {
     if (!$value) throw new RuntimeException($message);
     $count++;
 };
-$available = static function() use ($pdo): array {
-    $rows = $pdo->query("SELECT id,zayavki_ids,zayavki_count,total_mass_tonn,comment FROM status_blocks WHERE id>109 AND status_type='dostupno' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+if ($legacyPdo !== $pdo) {
+    $ok(
+        $pdo->query('SELECT CURRENT_USER()')->fetchColumn() !== $legacyPdo->query('SELECT CURRENT_USER()')->fetchColumn(),
+        'tenant and legacy schemas use independently authenticated accounts'
+    );
+}
+$available = static function() use ($legacyPdo): array {
+    $rows = $legacyPdo->query("SELECT id,zayavki_ids,zayavki_count,total_mass_tonn,comment FROM status_blocks WHERE id>109 AND status_type='dostupno' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as &$row) {
         $row['id'] = (int)$row['id'];
         $row['zayavki_count'] = (int)$row['zayavki_count'];
@@ -40,13 +60,14 @@ $oldLegacy = getenv('FEO_LEGACY_SYNC_DATABASE');
 $oldConnection = getenv('FEO_LEGACY_SYNC_CONNECTION_B64');
 
 cleanCompanyPoolDatabase($pdo);
+if ($legacyPdo !== $pdo) cleanCompanyPoolDatabase($legacyPdo);
 try {
     $pdo->exec("CREATE TABLE feo_requests(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $migration = file_get_contents(BASE_PATH . '/database/migrations-local/123_create_feo_map_placement.sql');
     if ($migration === false) throw new RuntimeException('Migration 123 unavailable.');
     foreach (array_filter(array_map('trim', preg_split('/;\s*(?:\R|$)/', $migration) ?: [])) as $statement) $pdo->exec($statement);
-    $pdo->exec("CREATE TABLE feo(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("CREATE TABLE status_blocks(
+    $legacyPdo->exec("CREATE TABLE feo(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $legacyPdo->exec("CREATE TABLE status_blocks(
         id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         block_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         comment VARCHAR(255) NULL,
@@ -60,15 +81,15 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=110");
     $pdo->exec("INSERT INTO feo_requests(zayavka_id,mass_netto) VALUES
         ('100001',1),('100002',2),('100003',3),('100004',4),('100005',5)");
-    $pdo->exec("INSERT INTO feo(zayavka_id,mass_netto) VALUES
+    $legacyPdo->exec("INSERT INTO feo(zayavka_id,mass_netto) VALUES
         ('100001',1),('100002',2),('100003',3),('100004',4)");
-    $pdo->exec("INSERT INTO status_blocks(id,comment,status_type,status_value,zayavki_count,total_mass_tonn,zayavki_ids) VALUES
+    $legacyPdo->exec("INSERT INTO status_blocks(id,comment,status_type,status_value,zayavki_count,total_mass_tonn,zayavki_ids) VALUES
         (109,'История','dostupno','Доступно к вывозу',1,9,'999999'),
         (110,'Исходный блок','dostupno','Доступно к вывозу',2,3,'100001,100002'),
         (111,'Дубль из старой ERP','dostupno','Доступно к вывозу',1,1,'100001')");
 
     putenv('FEO_LEGACY_SYNC_TENANT_DATABASE=' . $database);
-    putenv('FEO_LEGACY_SYNC_DATABASE=' . $database);
+    putenv('FEO_LEGACY_SYNC_DATABASE=' . $legacyDatabase);
     if (!getenv('PLANEX_TEST_PLACEMENT_LEGACY_XA')) putenv('FEO_LEGACY_SYNC_CONNECTION_B64');
 
     $service = new FeoPlacementService();
@@ -105,7 +126,7 @@ try {
     $ok($current() === ['100004'], 'last request removed from tenant');
     $ok(count($rows) === 1 && $rows[0]['zayavki_ids'] === '100004', 'empty legacy block deleted');
     $ok((int)($lastRemoval['legacy_sync']['deleted_blocks'] ?? 0) === 1, 'deleted block reported');
-    $ok((string)$pdo->query('SELECT zayavki_ids FROM status_blocks WHERE id=109')->fetchColumn() === '999999', 'historical block 109 is untouched');
+    $ok((string)$legacyPdo->query('SELECT zayavki_ids FROM status_blocks WHERE id=109')->fetchColumn() === '999999', 'historical block 109 is untouched');
 
     $statusPreview = $service->previewStatusChange($pdo, (int)$excluded['block_id'], 'disabled');
     $statusResult = $service->changeStatus($pdo, (int)$excluded['block_id'], 'disabled', (string)$statusPreview['state_hash']);
@@ -141,6 +162,7 @@ try {
 } finally {
     if ($pdo->inTransaction()) $pdo->rollBack();
     cleanCompanyPoolDatabase($pdo);
+    if ($legacyPdo !== $pdo) cleanCompanyPoolDatabase($legacyPdo);
     foreach ([
         'FEO_LEGACY_SYNC_TENANT_DATABASE'=>$oldTenant,
         'FEO_LEGACY_SYNC_DATABASE'=>$oldLegacy,
