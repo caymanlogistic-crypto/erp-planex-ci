@@ -53,6 +53,12 @@ jobs:
           for binary in /usr/bin/libreoffice /usr/local/bin/libreoffice /opt/libreoffice/program/soffice /usr/bin/soffice; do
             if test -x "$binary"; then printf 'PDF_PATH_%s=EXECUTABLE\n' "$binary"; fi
           done
+          printf 'RUNTIME_ARCH=%s\n' "$(uname -m)"
+          printf 'RUNTIME_GLIBC=%s\n' "$(getconf GNU_LIBC_VERSION 2>/dev/null || printf unknown)"
+          df -Pk "$HOME" | awk 'NR==2 {printf "RUNTIME_FREE_KB=%s\n", $4}'
+          for binary in wkhtmltopdf chromium chromium-browser google-chrome weasyprint pandoc gs; do
+            if command -v "$binary" >/dev/null; then printf 'ALTERNATIVE_PDF_BINARY_%s=READY\n' "$binary"; else printf 'ALTERNATIVE_PDF_BINARY_%s=MISSING\n' "$binary"; fi
+          done
           /usr/bin/php8.5 -r 'foreach (["proc_open"=>function_exists("proc_open"),"ZipArchive"=>class_exists("ZipArchive"),"DOMDocument"=>class_exists("DOMDocument")] as $name=>$ready) echo "PHP_",$name,"=",($ready?"READY":"MISSING"),PHP_EOL;'
           REMOTE
       - name: Remove task key
