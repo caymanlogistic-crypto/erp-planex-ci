@@ -36,7 +36,7 @@ jobs:
           parts=sorted(glob.glob('resources/document-templates/contract_vehicle_lease_crew_v9.docx.b64.part*'))
           if len(parts)<2: raise SystemExit('Built-in contract parts missing')
           with open(os.environ['RUNNER_TEMP']+'/sample.docx','wb') as out:
-              for part in parts: out.write(base64.b64decode(open(part,'rb').read(),validate=True))
+              for part in parts: out.write(base64.b64decode(b''.join(open(part,'rb').read().split()),validate=True))
           PY
           tar -C "$RUNNER_TEMP/lo-root" -czf "$RUNNER_TEMP/converter-probe.tar.gz" opt/libreoffice7.1
       - name: Configure isolated SSH credentials
