@@ -64,11 +64,7 @@ try {
 
     $pageTitle = 'Перевозчик: ' . $contractor['name'];
 
-    try {
-        $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch();
-    } catch (\Exception $e) {
-        $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql')));
-    }
+    $localPdo->query('SELECT 1 FROM crews LIMIT 0');
 
     $crewCheck = $localPdo->prepare('SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND deleted_at IS NULL');
     $crewCheck->execute([(int) $id]);

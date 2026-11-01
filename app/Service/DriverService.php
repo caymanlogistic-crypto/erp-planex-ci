@@ -38,22 +38,14 @@ final class DriverService
 
     public function ensureDriverTables(PDO $localPdo): void
     {
-        try { $localPdo->query("SELECT 1 FROM drivers LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/004_create_company_drivers.sql'))); }
-        try { $localPdo->query("SELECT created_by_user_id FROM drivers LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec("ALTER TABLE drivers ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL"); }
-        try { $localPdo->query("SELECT 1 FROM entity_access_grants LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/009_create_entity_access_grants.sql'))); }
+        $localPdo->query('SELECT created_by_user_id, created_by_role FROM drivers LIMIT 0');
+        $localPdo->query('SELECT 1 FROM entity_access_grants LIMIT 0');
     }
 
     public function ensureDocumentTables(PDO $localPdo): void
     {
-        try { $localPdo->query("SELECT 1 FROM documents LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql'))); }
-        try { $localPdo->query("SELECT 1 FROM document_types LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql'))); $localPdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql'))); }
-        try { $localPdo->query("SELECT created_by_user_id FROM documents LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec("ALTER TABLE documents ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL"); }
+        $localPdo->query('SELECT document_type_id, created_by_user_id, created_by_role FROM documents LIMIT 0');
+        $localPdo->query('SELECT 1 FROM document_types LIMIT 0');
     }
 
     public function getDocTypes(PDO $localPdo): array
@@ -238,10 +230,8 @@ final class DriverService
 
     public function checkDriverHasCrews(PDO $localPdo, int $id): bool
     {
-        try { $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql'))); }
-        try { $localPdo->query("SELECT 1 FROM driver_vehicle_blocks LIMIT 1")->fetch(); }
-        catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/018_create_driver_vehicle_blocks.sql'))); }
+        $localPdo->query('SELECT 1 FROM crews LIMIT 0');
+        $localPdo->query('SELECT 1 FROM driver_vehicle_blocks LIMIT 0');
 
         $stmt = $localPdo->prepare(
             'SELECT 1 FROM crews c

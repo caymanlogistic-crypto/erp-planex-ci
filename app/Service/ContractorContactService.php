@@ -8,14 +8,7 @@ final class ContractorContactService
 {
     public static function ensureTable(PDO $pdo): void
     {
-        try {
-            $pdo->query('SELECT 1 FROM contractor_contacts LIMIT 1')->fetch();
-        } catch (\Throwable $e) {
-            $migrationSql = file_get_contents(base_path('database/migrations-local/012_create_contractor_contacts.sql'));
-            if ($migrationSql !== false) {
-                $pdo->exec($migrationSql);
-            }
-        }
+        $pdo->query('SELECT 1 FROM contractor_contacts LIMIT 0');
     }
 
     public static function loadByContractorId(PDO $pdo, int $contractorId): array

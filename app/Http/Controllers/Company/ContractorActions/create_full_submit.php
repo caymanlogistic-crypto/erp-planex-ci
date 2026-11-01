@@ -60,34 +60,12 @@ try {
     $localPdo = $localDb->connection();
     applyLocalMigrations($localPdo);
 
-    $requiredTables = [
-        'contractors' => 'database/migrations-local/003_create_company_contractors.sql',
-        'drivers'     => 'database/migrations-local/004_create_company_drivers.sql',
-        'vehicle_units' => 'database/migrations-local/005_create_company_vehicles.sql',
-        'vehicle_sets' => 'database/migrations-local/017_create_vehicle_sets.sql',
-        'driver_vehicle_blocks' => 'database/migrations-local/018_create_driver_vehicle_blocks.sql',
-        'crews'       => 'database/migrations-local/006_create_company_crews.sql',
-    ];
-
-    foreach ($requiredTables as $table => $migrationFile) {
-        try {
-            $localPdo->query("SELECT 1 FROM `$table` LIMIT 1")->fetch();
-        } catch (\Exception $e) {
-            $migrationSql = file_get_contents(base_path($migrationFile));
-            if ($migrationSql !== false && trim($migrationSql) !== '') {
-                $localPdo->exec($migrationSql);
-            }
-        }
-    }
-
-    try {
-        $localPdo->query("SELECT 1 FROM vehicle_units LIMIT 1")->fetch();
-    } catch (\Exception $e) {
-        try {
-            $localPdo->exec("RENAME TABLE vehicles TO vehicle_units");
-        } catch (\Exception $renameEx) {
-        }
-    }
+    $localPdo->query('SELECT 1 FROM `contractors` LIMIT 0');
+    $localPdo->query('SELECT 1 FROM `drivers` LIMIT 0');
+    $localPdo->query('SELECT 1 FROM `vehicle_units` LIMIT 0');
+    $localPdo->query('SELECT 1 FROM `vehicle_sets` LIMIT 0');
+    $localPdo->query('SELECT 1 FROM `driver_vehicle_blocks` LIMIT 0');
+    $localPdo->query('SELECT 1 FROM `crews` LIMIT 0');
 
     $contractorMode = trim($_POST['contractor_mode'] ?? 'existing');
     $driverMode = trim($_POST['driver_mode'] ?? 'existing');

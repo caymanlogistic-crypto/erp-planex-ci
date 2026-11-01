@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Fail-closed audit for the intentional dynamic SQL identifier sites.
 
-The legacy architecture guard deliberately uses a broad heuristic and reports
-four Company-action warnings. A fifth Superadmin site is handled by a dedicated
-whitelist check inside architecture_guard.php. This audit covers all five sites
-uniformly and fails if a new dynamic identifier site appears, an approved static
-map changes unexpectedly, or an identifier becomes request-derived.
+The remaining Document-action and Superadmin dynamic identifiers have closed
+whitelists. Contractor submit actions now use literal read-only prerequisites.
+This audit fails if an identifier becomes request-derived or a schema-write
+fallback returns to those contractor actions.
 """
 from __future__ import annotations
 
@@ -26,7 +25,7 @@ CONTRACTOR_FILES = {
 SUPERADMIN_ENTITY_FILE = Path(
     "app/Http/Controllers/Superadmin/ManagementActions/entity_list.php"
 )
-EXPECTED = set(DOCUMENT_FILES) | CONTRACTOR_FILES | {SUPERADMIN_ENTITY_FILE}
+EXPECTED = set(DOCUMENT_FILES) | {SUPERADMIN_ENTITY_FILE}
 
 ALLOWED_ENTITY_TABLES = {
     "client": ("clients", "name"),
@@ -46,14 +45,10 @@ SUPERADMIN_ENTITY_TABLES = {
     "crew": "crews",
 }
 
-REQUIRED_TABLE_MIGRATIONS = {
-    "contractors": "database/migrations-local/003_create_company_contractors.sql",
-    "drivers": "database/migrations-local/004_create_company_drivers.sql",
-    "vehicle_units": "database/migrations-local/005_create_company_vehicles.sql",
-    "vehicle_sets": "database/migrations-local/017_create_vehicle_sets.sql",
-    "driver_vehicle_blocks": "database/migrations-local/018_create_driver_vehicle_blocks.sql",
-    "crews": "database/migrations-local/006_create_company_crews.sql",
-}
+REQUIRED_CONTRACTOR_TABLES = (
+    "contractors", "drivers", "vehicle_units", "vehicle_sets",
+    "driver_vehicle_blocks", "crews",
+)
 
 # Keep deliberately aligned with architecture_guard.php's broad heuristic.
 DYNAMIC_FROM = re.compile(r"FROM\s+`?\$[A-Za-z_][A-Za-z0-9_]*`?", re.I)
@@ -129,19 +124,13 @@ def audit_document_file(rel: Path, map_variable: str) -> None:
 
 def audit_contractor_file(rel: Path) -> None:
     content = text(rel)
-    if "$requiredTables" not in content:
-        fail(f"{rel}: requiredTables closed map is missing")
-    if "foreach ($requiredTables as $table => $migrationFile)" not in content:
-        fail(f"{rel}: dynamic table variable no longer comes from requiredTables")
-    if 'SELECT 1 FROM `$table` LIMIT 1' not in content:
-        fail(f"{rel}: expected table probe changed; review required")
-
-    for table, migration in REQUIRED_TABLE_MIGRATIONS.items():
-        if f"'{table}'" not in content or f"'{migration}'" not in content:
-            fail(f"{rel}: closed requiredTables mapping changed for {table}")
-
-    if re.search(r"\$table\s*=\s*[^;]*\$_(?:GET|POST|REQUEST)", content):
-        fail(f"{rel}: request-derived table identifier detected")
+    for table in REQUIRED_CONTRACTOR_TABLES:
+        if f"SELECT 1 FROM `{table}` LIMIT 0" not in content:
+            fail(f"{rel}: literal read-only prerequisite missing for {table}")
+    if re.search(r"\b(?:CREATE|ALTER|RENAME|DROP)\s+TABLE\b|->exec\s*\(", content, re.I):
+        fail(f"{rel}: request-time schema mutation remains")
+    if re.search(r"FROM\s+`?\$table", content, re.I):
+        fail(f"{rel}: dynamic table identifier remains")
 
 
 def audit_superadmin_entity_file(rel: Path) -> None:
