@@ -31,8 +31,7 @@ try {
 
     try { $localPdo->query("SELECT 1 FROM users LIMIT 1")->fetch(); }
     catch (\Exception $e) {
-        $migrationSql = file_get_contents(base_path('database/migrations-local/001_create_company_users.sql'));
-        $localPdo->exec($migrationSql);
+        throw new \RuntimeException('Данные компании не подготовлены. Обратитесь к администратору.', 0, $e);
     }
 
     $fullName = trim($_POST['full_name'] ?? '');

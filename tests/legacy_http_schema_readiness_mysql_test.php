@@ -25,7 +25,8 @@ $tables = [
     'users' => 'id INT, created_by_user_id INT, created_by_role VARCHAR(20), position VARCHAR(255)',
     'clients' => 'id INT, created_by_user_id INT, created_by_role VARCHAR(20)',
     'contractors' => 'id INT, created_by_user_id INT, created_by_role VARCHAR(20)',
-    'drivers' => 'id INT, created_by_user_id INT, created_by_role VARCHAR(20)',
+    'drivers' => 'id INT, full_name VARCHAR(255), created_by_user_id INT, created_by_role VARCHAR(20)',
+    'driver_phones' => 'driver_id INT, phone VARCHAR(50), is_main INT, comment TEXT, created_by_user_id INT, created_by_role VARCHAR(20)',
     'vehicle_units' => 'id INT, created_by_user_id INT, created_by_role VARCHAR(20)',
     'crews' => 'id INT, created_by_user_id INT, created_by_role VARCHAR(20)',
     'documents' => 'id INT, document_type_id INT, created_by_user_id INT, created_by_role VARCHAR(20)',
@@ -34,7 +35,7 @@ $tables = [
     'client_contacts' => 'id INT, client_id INT',
     'vehicle_sets' => 'id INT, primary_vehicle_unit_id INT, created_by_user_id INT, created_by_role VARCHAR(20)',
     'driver_vehicle_blocks' => 'id INT, driver_id INT, vehicle_set_id INT',
-    'document_types' => 'id INT, name VARCHAR(100), entity_type VARCHAR(20)',
+    'document_types' => 'id INT, name VARCHAR(100), code VARCHAR(50), entity_type VARCHAR(20), sort_order INT',
     'linear_route_financial_terms' => 'id INT, payment_due_type VARCHAR(100) NULL',
     'linear_route_payments' => 'id INT, payment_due_type VARCHAR(100) NULL',
 ];
@@ -45,7 +46,8 @@ $migrations = [
     '007_create_company_documents.sql', '008_add_ownership_columns.sql', '009_create_entity_access_grants.sql',
     '010_add_position_to_users.sql', '012_create_contractor_contacts.sql',
     '016_rename_vehicles_to_vehicle_units.sql', '017_create_vehicle_sets.sql',
-    '018_create_driver_vehicle_blocks.sql', '024_create_document_types.sql', '025_add_document_type_id.sql',
+    '018_create_driver_vehicle_blocks.sql', '015_create_driver_phones.sql',
+    '024_create_document_types.sql', '025_add_document_type_id.sql',
     '031_create_client_contacts.sql', '040_create_linear_routes.sql',
     '041_linear_route_repeatable_principals_payments.sql',
     '059_relax_legacy_linear_route_payment_terms.sql', '060_relax_linear_route_payment_legacy_due_fields.sql',
@@ -54,7 +56,7 @@ $migrations = [
 $insert = $pdo->prepare('INSERT INTO schema_migrations (migration) VALUES (?)');
 foreach ($migrations as $migration) $insert->execute([$migration]);
 
-foreach (['logists', 'clients', 'transport', 'linear'] as $scope) {
+foreach (['logists', 'clients', 'transport', 'driver-create', 'linear'] as $scope) {
     $ready = LegacyHttpSchemaReadinessProbe::inspect($pdo, $scope);
     $assert($ready === ['ready' => true, 'missing_migrations' => [], 'missing_columns' => [], 'non_nullable_columns' => []],
         "$scope journal and runtime columns must pass");
@@ -65,6 +67,18 @@ $unlogged = LegacyHttpSchemaReadinessProbe::inspect($pdo, 'transport');
 $assert(!$unlogged['ready'] && $unlogged['missing_migrations'] === ['016_rename_vehicles_to_vehicle_units.sql'],
     'Vehicle rename without journal must fail closed');
 $insert->execute(['016_rename_vehicles_to_vehicle_units.sql']);
+
+$pdo->exec("DELETE FROM schema_migrations WHERE migration='015_create_driver_phones.sql'");
+$unloggedDriverPhones = LegacyHttpSchemaReadinessProbe::inspect($pdo, 'driver-create');
+$assert(!$unloggedDriverPhones['ready'] && $unloggedDriverPhones['missing_migrations'] === ['015_create_driver_phones.sql'],
+    'Driver creation without driver phones migration must fail closed');
+$insert->execute(['015_create_driver_phones.sql']);
+
+$pdo->exec('ALTER TABLE driver_phones DROP COLUMN created_by_role');
+$driftedDriverPhones = LegacyHttpSchemaReadinessProbe::inspect($pdo, 'driver-create');
+$assert(!$driftedDriverPhones['ready'] && in_array('driver_phones.created_by_role', $driftedDriverPhones['missing_columns'], true),
+    'Driver creation without phone ownership column must fail closed');
+$pdo->exec('ALTER TABLE driver_phones ADD COLUMN created_by_role VARCHAR(20) NULL');
 
 $pdo->exec('ALTER TABLE crews DROP COLUMN created_by_role');
 $drifted = LegacyHttpSchemaReadinessProbe::inspect($pdo, 'transport');
@@ -77,4 +91,4 @@ $notNullable = LegacyHttpSchemaReadinessProbe::inspect($pdo, 'linear');
 $assert(!$notNullable['ready'] && $notNullable['non_nullable_columns'] === ['linear_route_payments.payment_due_type'],
     'Request-time ALTER prerequisite must fail closed');
 
-echo "LEGACY_HTTP_SCHEMA_READINESS_MYSQL=PASS scopes=4 absent=REJECTED ready=PASS unjournaled=REJECTED drifted=REJECTED nullable=REJECTED\n";
+echo "LEGACY_HTTP_SCHEMA_READINESS_MYSQL=PASS scopes=5 absent=REJECTED ready=PASS unjournaled=REJECTED drifted=REJECTED nullable=REJECTED\n";

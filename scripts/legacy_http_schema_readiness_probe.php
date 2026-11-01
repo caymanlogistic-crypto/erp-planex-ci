@@ -8,7 +8,8 @@ final class LegacyHttpSchemaReadinessProbe
         'users' => ['id', 'created_by_user_id', 'created_by_role', 'position'],
         'clients' => ['id', 'created_by_user_id', 'created_by_role'],
         'contractors' => ['id', 'created_by_user_id', 'created_by_role'],
-        'drivers' => ['id', 'created_by_user_id', 'created_by_role'],
+        'drivers' => ['id', 'full_name', 'created_by_user_id', 'created_by_role'],
+        'driver_phones' => ['driver_id', 'phone', 'is_main', 'comment', 'created_by_user_id', 'created_by_role'],
         'vehicle_units' => ['id', 'created_by_user_id', 'created_by_role'],
         'crews' => ['id', 'created_by_user_id', 'created_by_role'],
         'documents' => ['id', 'document_type_id', 'created_by_user_id', 'created_by_role'],
@@ -17,7 +18,7 @@ final class LegacyHttpSchemaReadinessProbe
         'client_contacts' => ['id', 'client_id'],
         'vehicle_sets' => ['id', 'primary_vehicle_unit_id', 'created_by_user_id', 'created_by_role'],
         'driver_vehicle_blocks' => ['id', 'driver_id', 'vehicle_set_id'],
-        'document_types' => ['id', 'name', 'entity_type'],
+        'document_types' => ['id', 'name', 'code', 'entity_type', 'sort_order'],
         'linear_route_financial_terms' => ['id', 'payment_due_type'],
         'linear_route_payments' => ['id', 'payment_due_type'],
     ];
@@ -49,6 +50,12 @@ final class LegacyHttpSchemaReadinessProbe
             'tables' => ['contractors', 'drivers', 'vehicle_units', 'crews', 'documents',
                 'entity_access_grants', 'contractor_contacts', 'vehicle_sets',
                 'driver_vehicle_blocks', 'document_types'],
+        ],
+        'driver-create' => [
+            'migrations' => ['004_create_company_drivers.sql', '007_create_company_documents.sql',
+                '008_add_ownership_columns.sql', '015_create_driver_phones.sql',
+                '024_create_document_types.sql', '025_add_document_type_id.sql'],
+            'tables' => ['drivers', 'driver_phones', 'documents', 'document_types'],
         ],
         'linear' => [
             'migrations' => ['007_create_company_documents.sql', '008_add_ownership_columns.sql',
@@ -115,7 +122,7 @@ if (!defined('PLANEX_LEGACY_HTTP_SCHEMA_PROBE_LIBRARY_ONLY')) {
             throw new RuntimeException('ROOT_SCOPE');
         }
         $scope = (string) getenv('PLANEX_SCHEMA_SCOPE');
-        if (!in_array($scope, ['logists', 'clients', 'transport', 'linear'], true)) {
+        if (!in_array($scope, ['logists', 'clients', 'transport', 'driver-create', 'linear'], true)) {
             throw new RuntimeException('SCOPE');
         }
         $config = require $root.'/bootstrap/app.php';
