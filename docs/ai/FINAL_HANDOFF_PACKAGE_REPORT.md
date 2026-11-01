@@ -123,11 +123,11 @@ All tests performed on PHP 8.5.6 built-in server.
 
 | Role | Login | Password |
 |------|-------|----------|
-| Owner | `owner_test_runtime` | `test1234` |
+| Owner | `owner_test_runtime` | `[удалено]` |
 | Senior Logist | `senior_runtime_1` | `senior1234` |
 | Logist 1 | `logist_runtime_1` | `[удалено]` |
 | Logist 2 | `logist_runtime_2` | `[удалено]` |
-| Superadmin | `admin@planex.local` | `test1234` |
+| Superadmin | `admin@planex.local` | `[удалено]` |
 
 ---
 
