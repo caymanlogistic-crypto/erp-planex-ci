@@ -48,19 +48,6 @@ try {
         return;
     }
 
-    $dbIdentifier = $company['db_identifier'];
-
-    try {
-        $tempPdo = new PDO(
-            sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['database']['host'] ?? '127.0.0.1', $config['database']['port'] ?? '3306'),
-            $config['database']['username'] ?? 'root',
-            $config['database']['password'] ?? ''
-        );
-        $tempPdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbIdentifier}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-    } catch (\Exception $e) {
-    }
-    $tempPdo = null;
-
     $localDbConfig = companyDatabaseConfig($config, $company);
     $localDb = new \App\Core\Database($localDbConfig);
     $localPdo = $localDb->connection();
@@ -69,30 +56,25 @@ try {
     try {
         $localPdo->query("SELECT 1 FROM users LIMIT 1")->fetch();
     } catch (\Exception $e) {
-        $migrationSql = file_get_contents(base_path('database/migrations-local/001_create_company_users.sql'));
-        $localPdo->exec($migrationSql);
+        throw new \RuntimeException('Данные компании не подготовлены. Обратитесь к администратору.', 0, $e);
     }
 
     try {
         $localPdo->query("SELECT created_by_user_id FROM users LIMIT 1")->fetch();
     } catch (\Exception $e) {
-        $localPdo->exec("ALTER TABLE users ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL");
+        throw new \RuntimeException('Данные компании не подготовлены. Обратитесь к администратору.', 0, $e);
     }
 
     try {
         $localPdo->query("SELECT 1 FROM entity_access_grants LIMIT 1")->fetch();
     } catch (\Exception $e) {
-        $migrationSql = file_get_contents(base_path('database/migrations-local/009_create_entity_access_grants.sql'));
-        $localPdo->exec($migrationSql);
+        throw new \RuntimeException('Данные компании не подготовлены. Обратитесь к администратору.', 0, $e);
     }
 
     try {
         $localPdo->query("SELECT position FROM users LIMIT 1")->fetch();
     } catch (\Exception $e) {
-        $migrationSql = file_get_contents(base_path('database/migrations-local/010_add_position_to_users.sql'));
-        if ($migrationSql !== false) {
-            $localPdo->exec($migrationSql);
-        }
+        throw new \RuntimeException('Данные компании не подготовлены. Обратитесь к администратору.', 0, $e);
     }
 
     $isLogist = ($_SESSION['role_code'] ?? '') === 'logist';
