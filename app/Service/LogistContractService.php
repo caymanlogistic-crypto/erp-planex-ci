@@ -125,7 +125,7 @@ final class LogistContractService
             if ($sha === '') throw new RuntimeException('Не удалось проверить PDF договора.');
             $snapshot = $prepared['snapshot'];
             $snapshot['logist_contract'] = ['type'=>$type,'version'=>$version,'trip_id'=>$tripId,'business_id'=>$businessId];
-            $name = DocumentService::safeDownloadName('Рейс ' . $businessId . ($type === 'sublease' ? ' Субаренда' : ' Аренда') . ' версия ' . $version . '.pdf');
+            $name = DocumentGeneratorService::contractDownloadName($businessId, (string)($snapshot['driver']['full_name'] ?? ''), $templateType, 'pdf');
             $pdo->beginTransaction();
             $stmt = $pdo->prepare('INSERT INTO logist_contracts(trip_id,business_id,contract_type,version_no,template_id,template_version_id,route_executor_id,snapshot_json,pdf_path,pdf_name,pdf_sha256,created_by_user_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
             $stmt->execute([$tripId,$businessId,$type,$version,(int)$active['template_id'],(int)$active['version_id'],$crew,json_encode($snapshot,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),$relativePath,$name,$sha,$userId]);

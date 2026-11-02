@@ -188,9 +188,7 @@ trait DocumentGeneratorWorkflowTrait
             $values = self::buildFixedValues($snapshot);
 
             if (in_array($type, ['vehicle_lease_crew','carrier_sublease_crew'], true)) {
-                $surname = self::driverSurname((string)($snapshot['driver']['full_name'] ?? ''));
-                if ($surname === '') throw new RuntimeException('Не указана фамилия водителя для имени файла договора.');
-                $downloadName = DocumentService::safeDownloadName('Рейс '.$tripNumber.' '.$surname.($type === 'carrier_sublease_crew' ? ' Субаренда' : '').'.docx');
+                $downloadName = self::contractDownloadName($tripNumber, (string)($snapshot['driver']['full_name'] ?? ''), $type, 'docx');
             } else {
                 $downloadName = DocumentService::safeDownloadName('Приложение-к-путевому-листу'.($number!==''?'_'.$number:'').'.docx');
             }
@@ -378,5 +376,15 @@ trait DocumentGeneratorWorkflowTrait
         $parts = preg_split('/\s+/u', trim($fullName), 2);
         $first = (string)($parts[0] ?? '');
         return preg_match('/^[\p{L}][\p{L}-]*$/u', $first) === 1 ? $first : '';
+    }
+
+    public static function contractDownloadName(int $tripNumber, string $driverName, string $type, string $extension): string
+    {
+        $surname = self::driverSurname($driverName);
+        if ($tripNumber <= 0 || $surname === '') throw new RuntimeException('Не указана фамилия водителя для имени файла договора.');
+        if (!in_array($type, ['vehicle_lease_crew', 'carrier_sublease_crew'], true) || !in_array($extension, ['docx', 'pdf'], true)) {
+            throw new RuntimeException('Неизвестный вид договора.');
+        }
+        return DocumentService::safeDownloadName('Рейс '.$tripNumber.' '.$surname.($type === 'carrier_sublease_crew' ? ' Субаренда' : '').'.'.$extension);
     }
 }

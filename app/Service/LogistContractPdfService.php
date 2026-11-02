@@ -56,8 +56,13 @@ final class LogistContractPdfService
                 foreach ($xp->query('.//w:t', $paragraph) as $node) $text .= $node->textContent;
                 if (!str_contains($text, '{{company.signature_name}}')) continue;
                 $count++;
-                $paragraph->appendChild(self::imageRun($dom, 'rIdPlanexSignature', 1180000, 560000, 'Подпись ПЛАНЭКС'));
-                $paragraph->appendChild(self::imageRun($dom, 'rIdPlanexSeal', 990000, 990000, 'Печать ПЛАНЭКС'));
+                // Anchor both images to the signature paragraph without changing
+                // its line height. The source sample places the signature above
+                // the line and the round seal beneath its left half.
+                $firstRun = $xp->query('./w:r', $paragraph)->item(0);
+                if (!$firstRun) throw new RuntimeException('В шаблоне повреждена строка подписи ПЛАНЭКС.');
+                $paragraph->insertBefore(self::imageRun($dom, 'rIdPlanexSignature', 1750000, 900000, 1450000, -750000, 'Подпись ПЛАНЭКС'), $firstRun);
+                $paragraph->insertBefore(self::imageRun($dom, 'rIdPlanexSeal', 1200000, 1200000, 35000, 140000, 'Печать ПЛАНЭКС'), $firstRun);
             }
             if ($count < 1) throw new RuntimeException('В актуальном шаблоне не найдено место подписи ПЛАНЭКС.');
             $seal = base_path(self::SEAL);
@@ -82,14 +87,14 @@ final class LogistContractPdfService
         }
     }
 
-    private static function imageRun(DOMDocument $dom, string $relationship, int $width, int $height, string $label): \DOMNode
+    private static function imageRun(DOMDocument $dom, string $relationship, int $width, int $height, int $x, int $y, string $label): \DOMNode
     {
         $w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
         $run = $dom->createElementNS($w, 'w:r');
         $drawing = $dom->createElementNS($w, 'w:drawing');
         $fragment = $dom->createDocumentFragment();
         $id = $relationship === 'rIdPlanexSeal' ? 801 : 802;
-        $fragment->appendXML('<wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="'.$width.'" cy="'.$height.'"/><wp:docPr id="'.$id.'" name="'.htmlspecialchars($label, ENT_XML1).'"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="'.$id.'" name="'.htmlspecialchars($label, ENT_XML1).'"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="'.$relationship.'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'.$width.'" cy="'.$height.'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline>');
+        $fragment->appendXML('<wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="251658240" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="character"><wp:posOffset>'.$x.'</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>'.$y.'</wp:posOffset></wp:positionV><wp:extent cx="'.$width.'" cy="'.$height.'"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="'.$id.'" name="'.htmlspecialchars($label, ENT_XML1).'"/><wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="'.$id.'" name="'.htmlspecialchars($label, ENT_XML1).'"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="'.$relationship.'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'.$width.'" cy="'.$height.'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor>');
         $drawing->appendChild($fragment);
         $run->appendChild($drawing);
         return $run;

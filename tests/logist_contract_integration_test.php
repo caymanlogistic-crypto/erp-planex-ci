@@ -64,6 +64,7 @@ $first = \App\Service\LogistContractService::create($pdo,$company,$companyId,101
 \App\Security\AccessRuntime::setCurrent($logistAccess);
 $_SESSION['role_code']='logist';
 check((int)$first['version_no'] === 1 && $first['status'] === 'pending', 'first immutable version');
+check($first['pdf_name'] === 'Рейс 463 Иванов.pdf', 'PDF name follows the main contract generator');
 check(($first['snapshot']['company']['name'] ?? '') === 'ООО «ПЛАНЭКС»'
     && ($first['snapshot']['executor']['name'] ?? '') === 'ООО Исполнитель', 'Planex contracts with the carrier');
 $firstPath = \App\Service\LogistContractService::pdfPath($first,$companyId);
@@ -71,6 +72,7 @@ check(file_get_contents($firstPath,false,null,0,5) === '%PDF-', 'first signed PD
 $firstHash = hash_file('sha256',$firstPath);
 $second = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['price'=>'190000']));
 check((int)$second['version_no'] === 2 && (int)$second['id'] !== (int)$first['id'], 'new version appended');
+check($second['pdf_name'] === $first['pdf_name'], 'version is tracked in ERP, not appended to the contract filename');
 check(hash_file('sha256',$firstPath) === $firstHash, 'first PDF not overwritten');
 check(\App\Service\LogistContractService::pendingCount($pdo) === 1, 'only latest pending counts');
 rejects(static fn() => \App\Service\LogistContractService::review($pdo,(int)$first['id'],102,'approved',''), 'superseded version approved');
@@ -78,4 +80,17 @@ rejects(static fn() => \App\Service\LogistContractService::review($pdo,(int)$fir
 check(\App\Service\LogistContractService::pendingCount($pdo) === 0, 'review clears attention');
 rejects(static fn() => \App\Service\LogistContractService::get($pdo,(int)$second['id'],102,false), 'another logist can read contract');
 rejects(static fn() => \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['route_executor_id'=>2])), 'unlisted executor accepted');
+$pdo->exec('CREATE TABLE warehouses(id INT PRIMARY KEY,name VARCHAR(255),full_address VARCHAR(255))');
+$pdo->exec('CREATE TABLE flights(id INT PRIMARY KEY,route_type VARCHAR(64),source_warehouse_id INT,destination_warehouse_id INT,zayavki_ids TEXT,direct_zayavki_ids TEXT)');
+$pdo->exec('CREATE TABLE warehouse_movements(id INT PRIMARY KEY,flight_id INT,warehouse_id INT,zayavka_id INT,movement_type VARCHAR(32),status VARCHAR(20),mass_netto DECIMAL(12,4))');
+$pdo->exec("INSERT INTO warehouses VALUES(1,'Склад Север','Новосибирск, Складская, 1'),(2,'Склад Юг','Новосибирск, Южная, 2')");
+$pdo->exec("INSERT INTO flights VALUES(463,'warehouse_to_warehouse',1,2,'300001',NULL)");
+$pdo->exec("INSERT INTO warehouse_movements VALUES(1,460,1,300001,'receipt','active',1)");
+$pdo->exec("UPDATE waste_trips SET legacy_route_type='warehouse_to_warehouse',legacy_source_warehouse_id=1,legacy_destination_warehouse_id=2,legacy_flight_id=463 WHERE id=1");
+foreach (['HOST'=>'127.0.0.1','PORT'=>(string)(getenv('PLANEX_SCHEMA_DB_PORT') ?: '33316'),'DATABASE'=>$schema,'USERNAME'=>(string)getenv('PLANEX_SCHEMA_DB_USER'),'PASSWORD'=>(string)getenv('PLANEX_SCHEMA_DB_PASSWORD')] as $key=>$value) putenv('LEGACY_FLIGHTS_DB_'.$key.'='.$value);
+$warehouse = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,$input);
+$request = $warehouse['snapshot']['requests'][0] ?? [];
+check(($request['document_loading_address'] ?? '') === 'Новосибирск, Складская, 1', 'warehouse to warehouse uses source warehouse loading address');
+check(($request['document_unloading_address'] ?? '') === 'Новосибирск, Южная, 2', 'warehouse to warehouse uses destination warehouse unloading address');
+check(($request['contacts'] ?? '') === '—', 'warehouse loading removes direct request contacts');
 echo "LOGIST_CONTRACT_IMMUTABLE_PDF_REVIEW=PASS\n";
