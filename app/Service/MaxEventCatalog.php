@@ -86,7 +86,7 @@ final class MaxEventCatalog
         $contractCreated = [
             'logist.contract.created' => [
                 'title' => 'Договор логиста — создан',
-                'description' => 'После создания новой версии договора. Отправка в группу MAX «тестовая».',
+                'description' => 'После создания новой версии договора. Отправка в выбранный чат MAX.',
                 'template' => "Создан договор логиста\nРейс #{{trip}} · версия {{version}}\n{{contract_type}}\nЛогист: {{logist}}\n{{url}}",
                 'variables' => [
                     'trip'=>['Номер рейса','463'],
