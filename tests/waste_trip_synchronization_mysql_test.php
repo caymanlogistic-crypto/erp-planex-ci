@@ -107,6 +107,12 @@ try {
         check(\App\Service\LinearRouteService::fetchVisibleClients($pdo,['user_id'=>1,'role_code'=>'logist'])===[],'Sync customer remains hidden to logist');
         check((string)$pdo->query("SELECT actor_role FROM waste_trip_audit_log ORDER BY id DESC LIMIT 1")->fetchColumn()==='logist_contract_sync','Synchronization audit does not impersonate owner');
         check((int)$pdo->query("SELECT created_by_membership_id FROM waste_trips WHERE business_id=226")->fetchColumn()===10,'Synchronized trip belongs to assigned manager, not initiating logist');
+        $customAccess=\App\Security\EffectiveAccess::member(1,25,['company.logistics.contracts'=>true],['client'=>'none','contractor'=>'none','vehicle_unit'=>'none','driver'=>'none','linear_trip'=>'none','waste_trip'=>'own'],'custom_role');
+        \App\Security\AccessRuntime::setCurrent($customAccess);
+        $customPrepared=Sync::runForContractPreparation($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'custom_role']);
+        check($customPrepared['failed']===0&&$customPrepared['updated']===2,'Custom role with contract page grant can synchronize');
+        check(\App\Security\AccessRuntime::current()===$customAccess,'Custom role scope restored after synchronization');
+        \App\Security\AccessRuntime::setCurrent($restricted);
         $legacy->failRead=true;
         reject(static fn()=>Sync::runForContractPreparation($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'logist']),'Source failure must propagate');
         $legacy->failRead=false;

@@ -19,7 +19,7 @@ final class WasteTripSynchronizationService
         if ($role === 'company_owner') return self::run($legacy, $tenant, $central, $companyId, $actor);
         $access = AccessRuntime::current();
         $membershipId = $access->membershipId();
-        if (!in_array($role, ['logist', 'senior_logist'], true)
+        if (!in_array($role, ['logist', 'senior_logist', 'custom_role'], true)
             || (int)($actor['user_id'] ?? 0) <= 0
             || !$access->isActive()
             || $access->companyId() !== $companyId
