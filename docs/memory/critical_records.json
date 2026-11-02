@@ -123,9 +123,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c308b4e70c8011f684a0b269a753edf8b8adec59",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c308b4e70c8011f684a0b269a753edf8b8adec59/tests/waste_trip_closing_ui_browser_test.mjs",
-      "verification_note": "2026-10-28: finance carrier popup badges link to the selected closing trip; the target search and document dialog select that trip despite saved filters, and old trips are prioritized inside the visibility-scoped 500-row registry. Focused finance and closing browser checks, closing view checks, and isolated closing-payment/readiness MySQL checks pass locally.",
+      "verified_sha": "d26ad0295a244e0eee887aa29df1279b58c730c5",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d26ad0295a244e0eee887aa29df1279b58c730c5/tests/waste_trip_synchronization_mysql_test.php",
+      "verification_note": "2026-11-02: contract preparation synchronizes legacy trips under a bounded service scope without impersonating the owner; the initiator's original access is restored on success and failure, and new synced trips belong to their assigned manager. Isolated MySQL waste-trip sync, logist contract PDF, role access and legacy mapping checks passed locally. Production preparation remains unverified because invoking it writes trip data.",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Service/RegistryManagerPresentation.php",
