@@ -219,7 +219,7 @@ final class LogistContractService
 
     private static function isLogist(string $role): bool
     {
-        return in_array($role, ['logist', 'senior_logist'], true);
+        return in_array($role, ['logist', 'senior_logist', 'custom_role'], true);
     }
 
     private static function assertCurrentLogist(PDO $pdo, int $userId, string $role): void

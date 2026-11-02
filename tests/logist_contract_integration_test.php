@@ -53,7 +53,16 @@ $input = ['trip_id'=>1,'route_executor_id'=>1,'contract_type'=>'lease','start_da
 $actor = ['user_id'=>101,'role_code'=>'logist'];
 check(array_column(\App\Service\LogistContractService::trips($pdo,$actor),'id') === [1], 'Logist sees only assigned trips, even when creator scope includes another trip');
 rejects(static fn() => \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['trip_id'=>2])), 'Logist cannot contract another assigned manager trip');
-$first = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,$input);
+$logistAccess=\App\Security\AccessRuntime::current();
+$customAccess=\App\Security\EffectiveAccess::member(1,$companyId,['company.logistics.contracts'=>true],$scopes,'custom_role');
+\App\Security\AccessRuntime::setCurrent($customAccess);
+$_SESSION['role_code']='custom_role';
+$customActor=['user_id'=>101,'role_code'=>'custom_role'];
+check(array_column(\App\Service\LogistContractService::trips($pdo,$customActor),'id') === [1], 'Custom role sees only assigned trips');
+rejects(static fn() => \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'custom_role',$customActor,array_replace($input,['trip_id'=>2])), 'Custom role cannot contract another manager trip');
+$first = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'custom_role',$customActor,$input);
+\App\Security\AccessRuntime::setCurrent($logistAccess);
+$_SESSION['role_code']='logist';
 check((int)$first['version_no'] === 1 && $first['status'] === 'pending', 'first immutable version');
 check(($first['snapshot']['company']['name'] ?? '') === 'ООО «ПЛАНЭКС»'
     && ($first['snapshot']['executor']['name'] ?? '') === 'ООО Исполнитель', 'Planex contracts with the carrier');
