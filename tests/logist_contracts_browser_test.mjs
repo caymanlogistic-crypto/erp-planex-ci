@@ -36,6 +36,12 @@ try{
       assert.equal(await page.locator(selector).isVisible(),false,`hidden alert is visible ${role} ${width} ${selector}`);
     }
     await assertRegistryVisualContract(page,`logist-contracts ${role} ${width}`);
+    const shellGap=await page.evaluate(()=>{
+      const head=document.querySelector('.registry-ui-head').getBoundingClientRect();
+      const card=document.querySelector('.registry-ui-card').getBoundingClientRect();
+      return card.top-head.bottom;
+    });
+    assert.ok(Math.abs(shellGap-12)<=1,`approved 12px header/table separation ${role} ${width}: ${shellGap}`);
     await assertRegistryDataContract(page,'logist-contracts');
     if(role==='logist') await assertRegistryTableState(page,'logist-contracts','initial',{runtime:true});
     const rows=[

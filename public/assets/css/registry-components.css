@@ -1,7 +1,7 @@
 /* APPROVED registry shell. Opt in with registry-ui-* classes; page CSS owns only data semantics. */
 .registry-ui-head.page-head {
   box-sizing:border-box; width:100%; height:58px; min-height:58px;
-  margin:0; padding:7px 12px; display:flex; align-items:center;
+  margin:0 0 12px; padding:7px 12px; display:flex; align-items:center;
   justify-content:space-between; gap:12px;
   border:1px solid #a8a196; border-radius:0;
   background:linear-gradient(180deg,#fefdf8 0%,#ece8de 100%);
@@ -106,7 +106,6 @@
 .registry-ui-card .registry-ui-table thead th {height:30px;padding:0 10px;border-top:0;border-left:0;background:#e3ded5;color:#2a2620;font:700 10px/14px var(--font);text-transform:uppercase}
 .registry-ui-card .registry-ui-table tbody td {padding-left:10px;padding-right:10px;border-top:0;border-left:0}
 .registry-ui-card .registry-ui-table--finance thead th {background:#d0ccc4;color:#34322f}
-.feo-transfers > .registry-ui-head.page-head {margin-bottom:12px}
 .registry-ui-card .registry-ui-table--placement.registry-ui-table--placement-blocks.transfer-history {table-layout:fixed;min-width:1160px;max-width:none;width:100%}
 .registry-ui-table .registry-id,.registry-ui-table .col-mono,.registry-ui-table .rp-v010-id {color:#131210;font-family:var(--font);font-size:12px;font-weight:700;line-height:16.8px;font-variant-numeric:tabular-nums}
 .registry-ui-table .registry-executor-secondary,.registry-ui-table .waste-legal-entity {color:#78726a}
