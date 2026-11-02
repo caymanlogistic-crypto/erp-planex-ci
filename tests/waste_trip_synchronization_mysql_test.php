@@ -9,8 +9,13 @@ namespace App\Service {
     final class RegulatedDataScopeService {
         public static bool $allowed = true;
         public static function assertCanCreate(string $type): int { if (!self::$allowed) throw new \RuntimeException('denied'); return 1; }
-        public static function condition(string $type,string $id,string $creator=''): array { return ['sql'=>self::$allowed ? '1=1' : '1=0','params'=>[]]; }
-        public static function canAccess(\PDO $pdo,string $type,string $table,int $id): bool { return self::$allowed; }
+        public static function condition(string $type,string $id,string $creator=''): array {
+            $access=\App\Security\AccessRuntime::current();
+            return ['sql'=>self::$allowed && (!$access->isActive() || $access->dataScope($type)==='all') ? '1=1' : '1=0','params'=>[]];
+        }
+        public static function canAccess(\PDO $pdo,string $type,string $table,int $id): bool {
+            return self::condition($type,$table.'.id')['sql']==='1=1';
+        }
     }
 }
 namespace {
@@ -91,7 +96,23 @@ try {
     $legacy->exec('SET SESSION TRANSACTION READ ONLY');
     $actor=['user_id'=>1,'role_code'=>'company_owner'];
     $run=static fn()=>Sync::run($legacy,$pdo,$central,25,$actor);
-    $first=$run();check($first['created']===2&&$first['failed']===0,'Create source rows: '.json_encode($first,JSON_UNESCAPED_UNICODE));
+    $restricted=\App\Security\EffectiveAccess::member(1,25,['company.logistics.contracts'=>true],['client'=>'none','contractor'=>'none','vehicle_unit'=>'none','driver'=>'none','linear_trip'=>'none','waste_trip'=>'none'],'logist');
+    \App\Security\AccessRuntime::setCurrent($restricted);
+    try {
+        check(\App\Service\LinearRouteService::fetchVisibleClients($pdo,['user_id'=>1,'role_code'=>'logist'])===[],'Logist does not see the sync customer');
+        reject(static fn()=>Sync::run($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'company_owner']),'Spoofed owner role must not override ambient data scope');
+        $prepared=Sync::runForContractPreparation($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'logist']);
+        check($prepared['failed']===0&&$prepared['created']===2,'Contract preparation reconciles with bounded reference scope');
+        check(\App\Security\AccessRuntime::current()===$restricted,'Original logist access restored after synchronization');
+        check(\App\Service\LinearRouteService::fetchVisibleClients($pdo,['user_id'=>1,'role_code'=>'logist'])===[],'Sync customer remains hidden to logist');
+        check((string)$pdo->query("SELECT actor_role FROM waste_trip_audit_log ORDER BY id DESC LIMIT 1")->fetchColumn()==='logist_contract_sync','Synchronization audit does not impersonate owner');
+        check((int)$pdo->query("SELECT created_by_membership_id FROM waste_trips WHERE business_id=226")->fetchColumn()===10,'Synchronized trip belongs to assigned manager, not initiating logist');
+        $legacy->failRead=true;
+        reject(static fn()=>Sync::runForContractPreparation($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'logist']),'Source failure must propagate');
+        $legacy->failRead=false;
+        check(\App\Security\AccessRuntime::current()===$restricted,'Logist scope restored after source failure');
+    } finally { \App\Security\AccessRuntime::clear(); }
+    $first=$run();check($first['updated']===2&&$first['failed']===0,'Owner can refresh synchronized source rows: '.json_encode($first,JSON_UNESCAPED_UNICODE));
     check((int)$pdo->query('SELECT COUNT(*) FROM waste_trips WHERE business_id=225')->fetchColumn()===0,'Cutoff');
     $trip=$pdo->query('SELECT * FROM waste_trips WHERE business_id=226')->fetch();$id=(int)$trip['id'];
     reject(static fn()=>Trips::update($pdo,$id,[],[],(int)$trip['lock_version'],$actor,null,[]),'MG cost POST must be rejected server-side');
