@@ -514,7 +514,7 @@ if (empty($topbarCrumbs)) {
 
             <div class="nav-group">
                 <div class="nav-section-label">ЛОГИСТЫ</div>
-                <a class="nav-item<?= $logistContractsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/contracts') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M9 13h6M9 17h6"/></svg><span class="nav-label">Договоры логистов</span></a>
+                <a class="nav-item<?= $logistContractsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/contracts') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M9 13h6M9 17h6"/></svg><span class="nav-label">Договора</span></a>
                 <a class="nav-item<?= $requestPath === '/company/logistics/closing-documents' ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/closing-documents') ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 2h7l3 3v9H3zM10 2v3h3M5 8h6M5 11h6" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
                     <span class="nav-label">Закрывающие документы</span>
@@ -651,7 +651,7 @@ if (empty($topbarCrumbs)) {
 
             <?php elseif ($roleCode === 'logist' || $roleCode === 'senior_logist'): ?>
 
-            <div class="nav-group"><div class="nav-section-label">ЛОГИСТЫ</div><a class="nav-item<?= $logistContractsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/contracts') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M9 13h6M9 17h6"/></svg><span class="nav-label">Договоры логистов</span></a></div>
+            <div class="nav-group"><div class="nav-section-label">ЛОГИСТЫ</div><a class="nav-item<?= $logistContractsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/contracts') ?>"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M9 13h6M9 17h6"/></svg><span class="nav-label">Договора</span></a></div>
 
             <div class="nav-group">
                 <div class="nav-section-label">ОПЕРАЦИИ</div>

@@ -22,6 +22,8 @@ try{
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);
   const labels=await page.locator('.sidebar .nav-label').allTextContents();
+  assert.equal(labels.includes('Договора'),true,'logistics menu label missing');
+  assert.equal(labels.includes('Договоры логистов'),false,'old logistics menu label remains');
   for(const hidden of ['Сообщения MAX','Касса','Операции']) assert.equal(labels.includes(hidden),false,hidden+' must be absent from menu');
   const calendar=page.locator('.sidebar .nav-label',{hasText:'Производственный календарь'}).first();
   assert.equal(await calendar.count(),1,'production calendar missing');
