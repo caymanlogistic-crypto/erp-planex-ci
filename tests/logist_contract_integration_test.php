@@ -64,14 +64,24 @@ $first = \App\Service\LogistContractService::create($pdo,$company,$companyId,101
 \App\Security\AccessRuntime::setCurrent($logistAccess);
 $_SESSION['role_code']='logist';
 check((int)$first['version_no'] === 1 && $first['status'] === 'pending', 'first immutable version');
+check(str_contains((string)$first['notification_warning'], 'Договор логиста — создан'), 'unconfigured MAX event gives actionable warning');
 check($first['pdf_name'] === 'Рейс 463 Иванов.pdf', 'PDF name follows the main contract generator');
 check(($first['snapshot']['company']['name'] ?? '') === 'ООО «ПЛАНЭКС»'
     && ($first['snapshot']['executor']['name'] ?? '') === 'ООО Исполнитель', 'Planex contracts with the carrier');
 $firstPath = \App\Service\LogistContractService::pdfPath($first,$companyId);
 check(file_get_contents($firstPath,false,null,0,5) === '%PDF-', 'first signed PDF');
 $firstHash = hash_file('sha256',$firstPath);
+$pdo->exec("INSERT INTO max_bots(id,name,token_encrypted,webhook_secret_encrypted,is_active) VALUES(1,'Бэрримор','local-test','local-test',1)");
+$pdo->exec("INSERT INTO max_chats(id,bot_id,chat_id,name,max_title,chat_type,max_status,is_active) VALUES(1,1,'-9001','ТЕСТОВЫЙ','Чтобы не забыть','chat','active',1)");
+(new \App\Service\MaxEventNotificationService($pdo))->saveRule([
+    'event_key'=>'logist.contract.created','is_enabled'=>1,'chat_config_id'=>1,
+    'message_template'=>\App\Service\MaxEventCatalog::event('logist.contract.created')['template'],
+    'message_format'=>'plain','notify'=>1,
+],102);
+$pdo->exec("UPDATE max_chats SET max_status='removed' WHERE id=1");
 $second = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['price'=>'190000']));
 check((int)$second['version_no'] === 2 && (int)$second['id'] !== (int)$first['id'], 'new version appended');
+check(str_contains((string)$second['notification_warning'], 'Выбранная группа или бот MAX неактивны.'), 'configured event selects group despite its unrelated ERP and MAX titles');
 check($second['pdf_name'] === $first['pdf_name'], 'version is tracked in ERP, not appended to the contract filename');
 check(hash_file('sha256',$firstPath) === $firstHash, 'first PDF not overwritten');
 check(\App\Service\LogistContractService::pendingCount($pdo) === 1, 'only latest pending counts');

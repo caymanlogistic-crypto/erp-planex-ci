@@ -132,7 +132,7 @@ final class LogistContractService
             $id = (int)$pdo->lastInsertId();
             $pdo->commit();
             $notificationWarning = null;
-            try { self::notifyTestGroup($pdo, $id, $businessId, $version, $type, $userId); }
+            try { self::notifyConfiguredGroup($pdo, $id, $businessId, $version, $type, $userId); }
             catch (Throwable $error) {
                 $notificationWarning = 'Договор сохранён, но уведомление в MAX не отправлено: ' . $error->getMessage();
                 error_log('Logist contract MAX notification failed for #' . $id . ': ' . $error->getMessage());
@@ -254,24 +254,27 @@ final class LogistContractService
         }
     }
 
-    private static function notifyTestGroup(PDO $pdo, int $id, int $businessId, int $version, string $type, int $userId): void
+    private static function notifyConfiguredGroup(PDO $pdo, int $id, int $businessId, int $version, string $type, int $userId): void
     {
-        $q = $pdo->query("SELECT id FROM max_chats WHERE (name='тестовая' OR max_title='тестовая') AND is_active=1 LIMIT 2");
-        $ids = $q->fetchAll(PDO::FETCH_COLUMN);
-        if (count($ids) !== 1) throw new RuntimeException('Группа MAX «тестовая» не найдена однозначно.');
+        $key = 'logist.contract.created';
+        $rule = $pdo->prepare('SELECT is_enabled,chat_config_id,message_template,message_format,notify FROM max_event_rules WHERE event_key=?');
+        $rule->execute([$key]);
+        $settings = $rule->fetch(PDO::FETCH_ASSOC);
+        if (!$settings || !(int)$settings['is_enabled'] || (int)$settings['chat_config_id'] <= 0) {
+            throw new RuntimeException('Настройте событие «Договор логиста — создан» и выберите чат на вкладке «События» в настройках MAX.');
+        }
         $name = $pdo->prepare('SELECT full_name FROM users WHERE id=?');
         $name->execute([$userId]);
-        $rule = $pdo->prepare("SELECT message_template FROM max_event_rules WHERE event_key='logist.contract.created' LIMIT 1");
-        $rule->execute();
-        $event = MaxEventCatalog::event('logist.contract.created');
-        $template = (string)($rule->fetchColumn() ?: $event['template']);
-        $message = MaxEventCatalog::render('logist.contract.created', $template, 'plain', [
+        $event = MaxEventCatalog::event($key);
+        $template = MaxEventCatalog::currentTemplate($key, (string)($settings['message_template'] ?: $event['template']));
+        $format = MaxEventCatalog::formatForTemplate($key, (string)$settings['message_format'], $template);
+        $message = MaxEventCatalog::render($key, $template, $format, [
             'trip'=>(string)$businessId,
             'version'=>(string)$version,
             'contract_type'=>$type === 'lease' ? 'Аренда' : 'Субаренда',
             'logist'=>(string)($name->fetchColumn() ?: '—'),
             'url'=>'https://plan-ex.ru' . app_url('/company/document-generator/logist-contracts?open=' . $id),
         ]);
-        (new MaxMessagingService($pdo))->sendToChat((int)$ids[0], $message, 'plain', true, 'event', $userId);
+        (new MaxMessagingService($pdo))->sendToChat((int)$settings['chat_config_id'], $message, $format, (bool)$settings['notify'], 'event', $userId);
     }
 }
