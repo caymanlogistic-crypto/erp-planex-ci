@@ -64,6 +64,11 @@ $first = \App\Service\LogistContractService::create($pdo,$company,$companyId,101
 \App\Security\AccessRuntime::setCurrent($logistAccess);
 $_SESSION['role_code']='logist';
 check((int)$first['version_no'] === 1 && $first['status'] === 'pending', 'first immutable version');
+check((int)$pdo->query('SELECT route_executor_id FROM waste_trips WHERE id=1')->fetchColumn() === 1, 'chosen executor is saved in the trip');
+check((string)$pdo->query('SELECT status FROM waste_trips WHERE id=1')->fetchColumn() === 'executor_assigned', 'trip moves out of executor search');
+check((string)$pdo->query('SELECT amount FROM waste_trip_carrier_payments WHERE waste_trip_id=1')->fetchColumn() === '185000.00', 'contract rate becomes carrier cost in the trip');
+$paymentId = (int)$pdo->query('SELECT id FROM waste_trip_carrier_payments WHERE waste_trip_id=1')->fetchColumn();
+check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_audit_log WHERE waste_trip_id=1 AND action='update' AND JSON_EXTRACT(after_json, '$.executor_sync_disabled')=true")->fetchColumn() === 1, 'manual executor assignment survives later source synchronization');
 check(str_contains((string)$first['notification_warning'], 'Договор логиста — создан'), 'unconfigured MAX event gives actionable warning');
 check($first['pdf_name'] === 'Рейс 463 Иванов.pdf', 'PDF name follows the main contract generator');
 check(($first['snapshot']['company']['name'] ?? '') === 'ООО «ПЛАНЭКС»'
@@ -81,6 +86,7 @@ $pdo->exec("INSERT INTO max_chats(id,bot_id,chat_id,name,max_title,chat_type,max
 $pdo->exec("UPDATE max_chats SET max_status='removed' WHERE id=1");
 $second = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['price'=>'190000']));
 check((int)$second['version_no'] === 2 && (int)$second['id'] !== (int)$first['id'], 'new version appended');
+check((string)$pdo->query('SELECT amount FROM waste_trip_carrier_payments WHERE waste_trip_id=1')->fetchColumn() === '185000.00', 'new contract version does not silently rewrite trip cost when executor is already assigned');
 check(str_contains((string)$second['notification_warning'], 'Выбранная группа или бот MAX неактивны.'), 'configured event selects group despite its unrelated ERP and MAX titles');
 check($second['pdf_name'] === $first['pdf_name'], 'version is tracked in ERP, not appended to the contract filename');
 check(hash_file('sha256',$firstPath) === $firstHash, 'first PDF not overwritten');
@@ -105,4 +111,16 @@ check(($request['document_unloading_address'] ?? '') === 'Новосибирск
 check(($request['contacts'] ?? '') === '—', 'warehouse loading removes direct request contacts');
 $sublease = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['contract_type'=>'sublease']));
 check(file_get_contents(\App\Service\LogistContractService::pdfPath($sublease,$companyId),false,null,0,5) === '%PDF-', 'sublease uses the same signed PDF rendering');
+$pdo->exec("UPDATE waste_trips SET route_executor_id=NULL,status='searching_executor',lock_version=lock_version+1 WHERE id=1");
+$beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM logist_contracts')->fetchColumn();
+rejects(static fn() => \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['price'=>'190000'])), 'existing different trip cost must not be overwritten');
+check((int)$pdo->query('SELECT COUNT(*) FROM logist_contracts')->fetchColumn() === $beforeCount
+    && $pdo->query('SELECT route_executor_id FROM waste_trips WHERE id=1')->fetchColumn() === null
+    && (int)$pdo->query('SELECT id FROM waste_trip_carrier_payments WHERE waste_trip_id=1')->fetchColumn() === $paymentId,
+    'cost conflict rolls back executor assignment and preserves payment identity');
+$equalCost = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,$input);
+check((int)$equalCost['id'] > 0
+    && (int)$pdo->query('SELECT route_executor_id FROM waste_trips WHERE id=1')->fetchColumn() === 1
+    && (int)$pdo->query('SELECT id FROM waste_trip_carrier_payments WHERE waste_trip_id=1')->fetchColumn() === $paymentId,
+    'existing matching trip cost keeps its payment row while assigning the executor');
 echo "LOGIST_CONTRACT_IMMUTABLE_PDF_REVIEW=PASS\n";

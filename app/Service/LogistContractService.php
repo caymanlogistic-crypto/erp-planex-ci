@@ -12,6 +12,8 @@ require_once __DIR__ . '/DocumentGeneratorService.php';
 require_once __DIR__ . '/LogistContractPdfService.php';
 require_once __DIR__ . '/MaxMessagingService.php';
 require_once __DIR__ . '/MaxEventCatalog.php';
+require_once __DIR__ . '/WasteTripCarrierPaymentService.php';
+require_once __DIR__ . '/FinanceObligationService.php';
 
 final class LogistContractService
 {
@@ -127,6 +129,16 @@ final class LogistContractService
             $snapshot['logist_contract'] = ['type'=>$type,'version'=>$version,'trip_id'=>$tripId,'business_id'=>$businessId];
             $name = DocumentGeneratorService::contractDownloadName($businessId, (string)($snapshot['driver']['full_name'] ?? ''), $templateType, 'pdf');
             $pdo->beginTransaction();
+            $currentQuery = $pdo->prepare('SELECT * FROM waste_trips WHERE id=? AND deleted_at IS NULL FOR UPDATE');
+            $currentQuery->execute([$tripId]);
+            $current = $currentQuery->fetch(PDO::FETCH_ASSOC);
+            if (!$current || (int)$current['lock_version'] !== (int)$trip['lock_version']
+                || (int)($current['route_executor_id'] ?? 0) !== (int)($trip['route_executor_id'] ?? 0)) {
+                throw new RuntimeException('Рейс изменился во время формирования договора. Откройте форму заново.');
+            }
+            if ((int)($trip['route_executor_id'] ?? 0) === 0) {
+                self::assignExecutorAndCost($pdo, $current, $crew, $price, $vat, $actor);
+            }
             $stmt = $pdo->prepare('INSERT INTO logist_contracts(trip_id,business_id,contract_type,version_no,template_id,template_version_id,route_executor_id,snapshot_json,pdf_path,pdf_name,pdf_sha256,created_by_user_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
             $stmt->execute([$tripId,$businessId,$type,$version,(int)$active['template_id'],(int)$active['version_id'],$crew,json_encode($snapshot,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),$relativePath,$name,$sha,$userId]);
             $id = (int)$pdo->lastInsertId();
@@ -252,6 +264,73 @@ final class LogistContractService
         } finally {
             AccessRuntime::setCurrent($access);
         }
+    }
+
+    private static function assignExecutorAndCost(PDO $pdo, array $trip, int $crew, string $price, string $vat, array $actor): void
+    {
+        if (in_array((string)$trip['status'], ['completed', 'cancelled'], true)) {
+            throw new RuntimeException('В завершённом рейсе нельзя назначить исполнителя.');
+        }
+        if ((string)($trip['legal_entity_code'] ?? '') === 'mg_logistic') {
+            throw new RuntimeException('Для рейса ООО «МГ Логистик» себестоимость не заполняется.');
+        }
+        if (WasteTripService::hasPreservedSettlements($trip)) {
+            throw new RuntimeException('По рейсу сохранены прежние взаиморасчёты. Исполнителя и ставку нужно согласовать в карточке рейса.');
+        }
+        $contractor = $pdo->prepare('SELECT contractor_id FROM crews WHERE id=?');
+        $contractor->execute([$crew]);
+        $chosenContractor = (int)$contractor->fetchColumn();
+        if ((int)($trip['carrier_contractor_id'] ?? 0) > 0
+            && $chosenContractor !== (int)$trip['carrier_contractor_id']) {
+            throw new RuntimeException('У выбранного исполнителя другой подрядчик. Проверьте перевозчика в рейсе.');
+        }
+        $tripId = (int)$trip['id'];
+        $targetCents = self::moneyCents($price);
+        $oldPayments = WasteTripCarrierPaymentService::fetchForTrip($pdo, $tripId);
+        if ($oldPayments !== []) {
+            $sum = $pdo->prepare('SELECT SUM(amount) FROM waste_trip_carrier_payments WHERE waste_trip_id=?');
+            $sum->execute([$tripId]);
+            if (self::moneyCents((string)$sum->fetchColumn()) !== $targetCents) {
+                throw new RuntimeException('Ставка договора отличается от существующей себестоимости рейса. Проверьте расчёты в карточке рейса.');
+            }
+        }
+        if (!empty($trip['no_markup'])) {
+            $sale = WasteTripCustomerPaymentService::fetchForTrip($pdo, $tripId);
+            if (WasteTripCarrierPaymentService::noMarkupCents($sale) !== $targetCents) {
+                throw new RuntimeException('В рейсе «Без наценки» ставка договора должна совпадать с суммой продажи.');
+            }
+        }
+        $update = $pdo->prepare("UPDATE waste_trips SET route_executor_id=?,status=IF(status='searching_executor','executor_assigned',status),updated_by_user_id=?,updated_by_role=?,lock_version=lock_version+1 WHERE id=? AND route_executor_id IS NULL");
+        $update->execute([$crew, (int)$actor['user_id'], (string)$actor['role_code'], $tripId]);
+        if ($update->rowCount() !== 1) throw new RuntimeException('Исполнитель рейса изменился. Откройте форму заново.');
+        if ($oldPayments === []) {
+            if (!empty($trip['no_markup'])) {
+                WasteTripCarrierPaymentService::synchronizeNoMarkup($pdo, $tripId, $actor);
+            } else {
+                $payment = WasteTripCarrierPaymentService::parseRows([[
+                    'amount'=>$price, 'payment_method'=>'cashless',
+                    'vat_rate'=>$vat === 'Без НДС' ? '' : 'unknown',
+                    'condition_type'=>'after_end', 'days_count'=>'7', 'days_kind'=>'working',
+                ]], true);
+                WasteTripCarrierPaymentService::store($pdo, $tripId, $payment, $actor);
+            }
+        }
+        FinanceObligationService::syncWasteTrip($pdo, $tripId);
+        $audit = $pdo->prepare('INSERT INTO waste_trip_audit_log(waste_trip_id,action,before_json,after_json,actor_user_id,actor_role) VALUES(?,?,?,?,?,?)');
+        $audit->execute([
+            $tripId, 'update',
+            json_encode(['trip'=>['route_executor_id'=>null,'status'=>$trip['status']],'carrier_payments'=>$oldPayments], JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
+            json_encode(['trip'=>['route_executor_id'=>$crew,'status'=>$trip['status']==='searching_executor'?'executor_assigned':$trip['status']],'executor_sync_disabled'=>true,'manual_route_executor_id'=>$crew,'carrier_cost'=>$price,'reason'=>'logist_contract'], JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
+            (int)$actor['user_id'], (string)$actor['role_code'],
+        ]);
+    }
+
+    private static function moneyCents(string $amount): int
+    {
+        $normalized = LinearRouteService::parseAmount($amount);
+        if ($normalized === null) throw new RuntimeException('Некорректная ставка перевозчика.');
+        [$whole, $fraction] = explode('.', $normalized, 2);
+        return (int)$whole * 100 + (int)$fraction;
     }
 
     private static function notifyConfiguredGroup(PDO $pdo, int $id, int $businessId, int $version, string $type, int $userId): void
