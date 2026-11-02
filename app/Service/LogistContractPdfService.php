@@ -56,13 +56,13 @@ final class LogistContractPdfService
                 foreach ($xp->query('.//w:t', $paragraph) as $node) $text .= $node->textContent;
                 if (!str_contains($text, '{{company.signature_name}}')) continue;
                 $count++;
-                // Anchor both images to the signature paragraph without changing
-                // its line height. The source sample places the signature above
-                // the line and the round seal beneath its left half.
+                // Keep the images fixed to the PLANEX signing line. The approved
+                // PDF sample has the seal crossing the line and the signature
+                // overlapping the right side of the seal.
                 $firstRun = $xp->query('./w:r', $paragraph)->item(0);
                 if (!$firstRun) throw new RuntimeException('В шаблоне повреждена строка подписи ПЛАНЭКС.');
-                $paragraph->insertBefore(self::imageRun($dom, 'rIdPlanexSignature', 1750000, 900000, 1450000, -750000, 'Подпись ПЛАНЭКС'), $firstRun);
-                $paragraph->insertBefore(self::imageRun($dom, 'rIdPlanexSeal', 1200000, 1200000, 35000, 140000, 'Печать ПЛАНЭКС'), $firstRun);
+                $paragraph->insertBefore(self::imageRun($dom, 'rIdPlanexSignature', 1200000, 1200000, 100000, -690000, 'Подпись ПЛАНЭКС'), $firstRun);
+                $paragraph->insertBefore(self::imageRun($dom, 'rIdPlanexSeal', 1600000, 1600000, -650000, -500000, 'Печать ПЛАНЭКС'), $firstRun);
             }
             if ($count < 1) throw new RuntimeException('В актуальном шаблоне не найдено место подписи ПЛАНЭКС.');
             $seal = base_path(self::SEAL);
