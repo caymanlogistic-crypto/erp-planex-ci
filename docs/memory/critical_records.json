@@ -123,9 +123,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d26ad0295a244e0eee887aa29df1279b58c730c5",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d26ad0295a244e0eee887aa29df1279b58c730c5/tests/waste_trip_synchronization_mysql_test.php",
-      "verification_note": "2026-11-02: contract preparation synchronizes legacy trips under a bounded service scope without impersonating the owner; the initiator's original access is restored on success and failure, and new synced trips belong to their assigned manager. Isolated MySQL waste-trip sync, logist contract PDF, role access and legacy mapping checks passed locally. Production preparation remains unverified because invoking it writes trip data.",
+      "verified_sha": "1f89b2db65517994decc406bcb80a99b41d02f4a",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d26ad0295a244e0eee887aa29df1279b58c730c5/tests/waste_trip_synchronization_mysql_test.php; https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ded3feb3d765dbe6ccb8d75fc5793b6804eda6ee/tests/waste_trip_closing_scroll_browser_test.mjs",
+      "verification_note": "2026-11-02: contract preparation synchronizes legacy trips under a bounded service scope without impersonating the owner; the initiator's original access is restored on success and failure, and new synced trips belong to their assigned manager. Isolated MySQL waste-trip sync, logist contract PDF, role access and legacy mapping checks passed locally. Production preparation remains unverified because invoking it writes trip data. The legacy closing-documents toolbar uses the approved shared sticky offset, eliminating the 50px gap below the topbar while scrolling. Focused legacy scroll checks at 1280/390 px, approved closing-registry browser checks, dialog readability and closing view checks passed locally.",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Service/RegistryManagerPresentation.php",
