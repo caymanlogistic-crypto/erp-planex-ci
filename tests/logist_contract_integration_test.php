@@ -93,4 +93,6 @@ $request = $warehouse['snapshot']['requests'][0] ?? [];
 check(($request['document_loading_address'] ?? '') === 'Новосибирск, Складская, 1', 'warehouse to warehouse uses source warehouse loading address');
 check(($request['document_unloading_address'] ?? '') === 'Новосибирск, Южная, 2', 'warehouse to warehouse uses destination warehouse unloading address');
 check(($request['contacts'] ?? '') === '—', 'warehouse loading removes direct request contacts');
+$sublease = \App\Service\LogistContractService::create($pdo,$company,$companyId,101,'logist',$actor,array_replace($input,['contract_type'=>'sublease']));
+check(file_get_contents(\App\Service\LogistContractService::pdfPath($sublease,$companyId),false,null,0,5) === '%PDF-', 'sublease uses the same signed PDF rendering');
 echo "LOGIST_CONTRACT_IMMUTABLE_PDF_REVIEW=PASS\n";
