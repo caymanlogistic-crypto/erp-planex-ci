@@ -42,6 +42,10 @@ $ok(($personalPage['path'] ?? '') === '/company/statistics/work'
     && ($personalPage['section'] ?? '') === 'Логисты'
     && in_array('company.statistics.work', $grantableKeys, true),
     'personal statistics must be a grantable page in the logist menu');
+$logistContracts = $registry->page('company.logistics.contracts');
+$ok(($logistContracts['label'] ?? '') === 'Договора'
+    && ($logistContracts['section'] ?? '') === 'Логисты',
+    'logistics contracts label must match the owner-approved menu wording');
 
 $js = (string)file_get_contents($root . '/public/assets/js/roles-access.js');
 $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');
@@ -52,5 +56,6 @@ $ok(!str_contains($layout, '<span class="nav-label">Операции</span>'), '
 $ok(str_contains($layout, '<div class="nav-section-label">НАСТРОЙКИ</div>') && str_contains($layout, '<span class="nav-label">Производственный календарь</span>'), 'fallback Settings calendar missing');
 $ok(!str_contains($layout, '<div class="nav-section-label">СТАТИСТИКА</div>'), 'fallback separate statistics section remains');
 $ok(substr_count($layout, '<span class="nav-label">Статистика</span>') === 2, 'both fallback menus need statistics folder');
+$ok(substr_count($layout, '<span class="nav-label">Договора</span>') === 2, 'both logistics fallback menus need Договора');
 
 echo "MENU_NAVIGATION_STRUCTURE_CONTRACT=PASS\n";
