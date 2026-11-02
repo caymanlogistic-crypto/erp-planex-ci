@@ -2,6 +2,8 @@
 
 namespace App\Service;
 
+use App\Security\AccessRuntime;
+use App\Security\EffectiveAccess;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -39,8 +41,15 @@ final class LogistContractService
 
     public static function trips(PDO $pdo, array $actor): array
     {
-        $trips = DocumentGeneratorService::listDocumentTrips($pdo);
-        return array_values(array_filter($trips, static fn(array $trip): bool => WasteTripService::canAccessTrip($pdo, $trip, $actor)));
+        $role = (string)($actor['role_code'] ?? '');
+        $userId = (int)($actor['user_id'] ?? 0);
+        self::assertCurrentLogist($pdo, $userId, $role);
+        $trips = self::withTripReadScope($role, static fn(): array => DocumentGeneratorService::listDocumentTrips($pdo));
+        return array_values(array_filter($trips, static function(array $trip) use ($pdo, $actor, $role, $userId): bool {
+            return self::isLogist($role)
+                ? (int)($trip['responsible_user_id'] ?? 0) === $userId
+                : WasteTripService::canAccessTrip($pdo, $trip, $actor);
+        }));
     }
 
     public static function executors(PDO $pdo, int $userId, string $role): array
@@ -51,8 +60,13 @@ final class LogistContractService
     public static function create(PDO $pdo, array $company, int $companyId, int $userId, string $role, array $actor, array $input): array
     {
         $tripId = (int)($input['trip_id'] ?? 0);
-        $trip = WasteTripService::fetchTrip($pdo, $tripId, false);
-        if (!$trip || !WasteTripService::canAccessTrip($pdo, $trip, $actor)) throw new RuntimeException('Рейс не найден или недоступен.');
+        self::assertCurrentLogist($pdo, $userId, $role);
+        $trip = self::withTripReadScope($role, static fn(): ?array => WasteTripService::fetchTrip($pdo, $tripId, false));
+        if (!$trip || (self::isLogist($role)
+            ? (int)($trip['responsible_user_id'] ?? 0) !== $userId
+            : !WasteTripService::canAccessTrip($pdo, $trip, $actor))) {
+            throw new RuntimeException('Рейс не найден или недоступен.');
+        }
         $type = (string)($input['contract_type'] ?? '');
         $templateType = match ($type) {
             'lease' => 'vehicle_lease_crew',
@@ -83,7 +97,7 @@ final class LogistContractService
         }
         if (!$template) throw new RuntimeException('Актуальный шаблон договора не найден.');
         $params = ['contract_date'=>$start,'start_date'=>$start,'finish_date'=>$finish,'price'=>$price,'vat_mode'=>$vat];
-        $prepared = DocumentGeneratorService::prepareFromTrip($pdo, $company, $companyId, $userId, $role, (int)$template['id'], $tripId, $params, null, $crew);
+        $prepared = self::withTripReadScope($role, static fn(): array => DocumentGeneratorService::prepareFromTrip($pdo, $company, $companyId, $userId, $role, (int)$template['id'], $tripId, $params, null, $crew));
         if (!($prepared['ok'] ?? false)) throw new RuntimeException(implode(' ', $prepared['errors'] ?? ['Договор не прошёл проверку.']));
         $active = $prepared['template'];
         $templatePath = DocumentService::resolveStoredPath($companyId, (string)$active['stored_path']);
@@ -201,6 +215,43 @@ final class LogistContractService
     {
         $snapshot = json_decode((string)$row['snapshot_json'], true);
         return is_array($snapshot) ? $snapshot : [];
+    }
+
+    private static function isLogist(string $role): bool
+    {
+        return in_array($role, ['logist', 'senior_logist'], true);
+    }
+
+    private static function assertCurrentLogist(PDO $pdo, int $userId, string $role): void
+    {
+        if (!self::isLogist($role)) return;
+        $access = AccessRuntime::current();
+        if (!$access->isActive() || !$access->canAccessPage('company.logistics.contracts')
+            || $access->membershipId() === null
+            || DocumentGeneratorService::resolveActorTenantUserId($pdo, $access->membershipId(), $userId) !== $userId) {
+            throw new RuntimeException('Рейсы недоступны текущему логисту.');
+        }
+    }
+
+    private static function withTripReadScope(string $role, callable $read): mixed
+    {
+        if (!self::isLogist($role)) return $read();
+        // Legacy sync rows may have been created by the owner. Read them here,
+        // then expose only trips assigned to the authenticated tenant user.
+        $access = AccessRuntime::current();
+        $scopes = [];
+        foreach (['client','contractor','vehicle_unit','driver','linear_trip','waste_trip'] as $entity) {
+            $scopes[$entity] = $entity === 'waste_trip' ? EffectiveAccess::SCOPE_ALL : $access->dataScope($entity);
+        }
+        AccessRuntime::setCurrent(EffectiveAccess::member(
+            (int)$access->membershipId(), (int)$access->companyId(),
+            ['company.logistics.contracts'=>true], $scopes, $role
+        ));
+        try {
+            return $read();
+        } finally {
+            AccessRuntime::setCurrent($access);
+        }
     }
 
     private static function notifyTestGroup(PDO $pdo, int $id, int $businessId, int $version, string $type, int $userId): void

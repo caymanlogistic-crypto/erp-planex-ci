@@ -54,9 +54,9 @@ final class LogistContractController
             $this->requireSchema($pdo);
             $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
             if (!$legacy) throw new RuntimeException('Источник рейсов недоступен. Договор не формируется до синхронизации.');
-            // This endpoint grants only synchronization, never the owner's review or trip-management actions.
-            $syncActor = ['user_id'=>$userId,'role_code'=>'company_owner'];
-            $result = WasteTripSynchronizationService::run($legacy, $pdo, $central, $companyId, $syncActor);
+            $result = WasteTripSynchronizationService::runForContractPreparation(
+                $legacy, $pdo, $central, $companyId, ['user_id'=>$userId,'role_code'=>$role]
+            );
             if ((int)$result['failed'] > 0) throw new RuntimeException('Не все рейсы синхронизированы. Проверьте журнал синхронизации рейсов.');
             DocumentGeneratorService::seedDefaultTemplates($pdo, $companyId, 0, 'system');
             $actor = ['user_id'=>$userId,'role_code'=>$role];

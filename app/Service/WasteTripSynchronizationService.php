@@ -2,16 +2,61 @@
 
 namespace App\Service;
 
+use App\Security\AccessRuntime;
+use App\Security\EffectiveAccess;
 use PDO;
 use RuntimeException;
 use Throwable;
 
-/** Explicit company-owner reconciliation; the existing hosting scheduler is separate. */
+/** Explicit owner reconciliation and guarded contract preparation; the hosting scheduler is separate. */
 final class WasteTripSynchronizationService
 {
+    private static bool $contractPreparationActive = false;
+
+    public static function runForContractPreparation(PDO $legacy, PDO $tenant, PDO $central, int $companyId, array $actor): array
+    {
+        $role = (string)($actor['role_code'] ?? '');
+        if ($role === 'company_owner') return self::run($legacy, $tenant, $central, $companyId, $actor);
+        $access = AccessRuntime::current();
+        $membershipId = $access->membershipId();
+        if (!in_array($role, ['logist', 'senior_logist'], true)
+            || (int)($actor['user_id'] ?? 0) <= 0
+            || !$access->isActive()
+            || $access->companyId() !== $companyId
+            || !$access->canAccessPage('company.logistics.contracts')
+            || $membershipId === null || $membershipId <= 0
+            || self::$contractPreparationActive) {
+            throw new RuntimeException('Синхронизация договоров недоступна.');
+        }
+        $identity = $tenant->prepare('SELECT id FROM users WHERE membership_id=? LIMIT 2');
+        $identity->execute([$membershipId]);
+        if (array_map('intval', $identity->fetchAll(PDO::FETCH_COLUMN)) !== [(int)$actor['user_id']]) {
+            throw new RuntimeException('Синхронизация договоров недоступна текущему логисту.');
+        }
+        // Reconciliation reads tenant reference data and updates all source trips;
+        // the logist's ordinary visibility is restored before trips are returned.
+        $scopes = array_fill_keys(['client','contractor','vehicle_unit','driver','linear_trip','waste_trip'], 'all');
+        self::$contractPreparationActive = true;
+        AccessRuntime::setCurrent(EffectiveAccess::member($membershipId, $companyId, ['company.logistics.contracts'=>true], $scopes, $role));
+        try {
+            return self::run($legacy, $tenant, $central, $companyId, ['user_id'=>(int)$actor['user_id'], 'role_code'=>'logist_contract_sync']);
+        } finally {
+            AccessRuntime::setCurrent($access);
+            self::$contractPreparationActive = false;
+        }
+    }
+
+    public static function contractPreparationActive(): bool
+    {
+        return self::$contractPreparationActive;
+    }
+
     public static function run(PDO $legacy, PDO $tenant, PDO $central, int $companyId, array $actor): array
     {
-        if (($actor['role_code'] ?? '') !== 'company_owner') throw new RuntimeException('Синхронизация доступна руководителю компании.');
+        if (($actor['role_code'] ?? '') !== 'company_owner'
+            && !(self::$contractPreparationActive && ($actor['role_code'] ?? '') === 'logist_contract_sync')) {
+            throw new RuntimeException('Синхронизация доступна руководителю компании.');
+        }
         RegulatedDataScopeService::assertCanCreate('waste_trip');
         if (!WasteTripService::legacyMetadataReady($tenant)) throw new RuntimeException('Для синхронизации требуется актуальная схема рейсов (149).');
         if ($companyId <= 0) throw new RuntimeException('Компания не выбрана.');
