@@ -14,6 +14,7 @@ let postCount=0;
 let lastSaveBody='';
 let documents=[];
 let nextDocumentId=300;
+let webpBytes;
 const payload=()=>JSON.stringify({ok:true,request:{id:12,is_complete:false,documents},trip:{complete_count:1,request_count:3}});
 const server=http.createServer((req,res)=>{
   if(req.method==='POST'){
@@ -41,7 +42,7 @@ const server=http.createServer((req,res)=>{
     const name=documents.find(document=>document.id===id)?.download_name || '';
     res.setHeader('Content-Type',name.endsWith('.pdf')?'application/pdf':name.endsWith('.webp')?'image/webp':'image/jpeg');
     res.setHeader('X-Frame-Options',name.endsWith('.pdf')?'SAMEORIGIN':'DENY');
-    return res.end(name.endsWith('.pdf')?'%PDF-1.4\n%%EOF':'test');
+    return res.end(name.endsWith('.pdf')?'%PDF-1.4\n%%EOF':name.endsWith('.webp')?webpBytes:'test');
   }
   const file=path.resolve(root,'public','.'+req.url.split('?')[0]);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
@@ -53,6 +54,11 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_EXECUTABLE?{executablePath:process.env.PLANEX_BROWSER_EXECUTABLE}:{})});
 try{
   const page=await browser.newPage({viewport:{width:1680,height:1000}}),errors=[];
+  webpBytes=Buffer.from((await page.evaluate(()=>{
+    const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=900;
+    canvas.getContext('2d').fillRect(0,0,1600,900);
+    return canvas.toDataURL('image/webp').split(',')[1];
+  })),'base64');
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
   assert.equal(await page.locator('.logistics-trip').count(),2,'trip list rendered');
@@ -125,12 +131,23 @@ try{
   page.once('dialog',dialog=>dialog.accept());
   await row.locator('.lab-docs-remove').first().click();
   await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({state:'attached',timeout:3000}).catch(async()=>{throw new Error('Delete not reflected: '+JSON.stringify({postCount,documents,label:await row.locator('[data-save-label]').textContent(),count:await row.locator('[data-document-count]').textContent(),errors}));});
-  await fileInput.setInputFiles({name:'scan.webp',mimeType:'image/webp',buffer:Buffer.from('webp-test')});
+  await fileInput.setInputFiles({name:'scan.webp',mimeType:'image/webp',buffer:webpBytes});
   await row.locator('[data-document-count]').filter({hasText:'2/2'}).waitFor({state:'attached'});
   await row.locator('.lab-docs-item').filter({hasText:'scan.webp'}).locator('.lab-docs-view').click();
   assert.equal(await page.locator('.lab-scan-preview-body img').count(),1,'WebP opens as an image');
   const webpDialog=await page.locator('.lab-scan-preview').boundingBox();
   assert.ok(Math.abs(webpDialog.width-1680*.8)<2 && Math.abs(webpDialog.height-1000*.8)<2,'desktop WebP preview occupies 80% of viewport width and height');
+  const previewImage=page.locator('.lab-scan-preview-body img');
+  await previewImage.evaluate(image=>image.decode());
+  const originalImage=await previewImage.boundingBox();
+  await page.mouse.move(originalImage.x+originalImage.width/2,originalImage.y+originalImage.height/2);
+  await page.mouse.wheel(0,-300);
+  assert.equal(await previewImage.getAttribute('data-zoom-level'),'1','wheel up increases image zoom');
+  assert.ok((await previewImage.boundingBox()).width>originalImage.width*1.24,'zoom enlarges the scan');
+  assert.equal(await page.locator('.lab-scan-preview-body').evaluate(body=>body.scrollWidth>body.clientWidth),true,'zoomed scan remains scrollable');
+  await page.mouse.wheel(0,300);
+  assert.equal(await previewImage.getAttribute('data-zoom-level'),'0','wheel down restores fitted size');
+  assert.ok(Math.abs((await previewImage.boundingBox()).width-originalImage.width)<2,'scan returns to its original width');
   await page.locator('.lab-scan-preview-head button').click();
   page.once('dialog',dialog=>dialog.accept());
   await row.locator('.lab-docs-item').filter({hasText:'scan.webp'}).locator('.lab-docs-remove').click();
