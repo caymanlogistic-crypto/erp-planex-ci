@@ -78,6 +78,22 @@
   preview.innerHTML = '<div class="lab-scan-preview-head"><strong>Просмотр скана</strong><button type="button" aria-label="Закрыть просмотр">×</button></div><div class="lab-scan-preview-body"></div>';
   preview.querySelector('button').addEventListener('click', () => preview.close());
   document.body.append(preview);
+  const imageZoomSteps = [1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
+  preview.querySelector('.lab-scan-preview-body').addEventListener('wheel', (event) => {
+    if (reviewerMode || !window.matchMedia('(min-width: 761px)').matches) return;
+    const body = event.currentTarget;
+    const image = body.querySelector('img');
+    if (!image || !image.complete || !image.naturalWidth || event.deltaY === 0) return;
+    const current = Number(image.dataset.zoomLevel || 0);
+    const next = Math.max(0, Math.min(imageZoomSteps.length - 1, current + (event.deltaY < 0 ? 1 : -1)));
+    if (next === current) return;
+    event.preventDefault();
+    const imageRect = image.getBoundingClientRect();
+    const ratio = imageZoomSteps[next] / imageZoomSteps[current];
+    image.dataset.zoomLevel = String(next);
+    body.scrollLeft += (event.clientX - imageRect.left) * (ratio - 1);
+    body.scrollTop += (event.clientY - imageRect.top) * (ratio - 1);
+  }, {passive: false});
   const showPreview = (button) => {
     const body = preview.querySelector('.lab-scan-preview-body');
     body.replaceChildren();

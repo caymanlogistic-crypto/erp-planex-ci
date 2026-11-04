@@ -349,9 +349,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c787ce6c36886cc19fedfc5eee479666277cdc6b",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c787ce6c36886cc19fedfc5eee479666277cdc6b/tests/trip_completion_browser_test.mjs",
-      "verification_note": "2026-11-04: OWNER specified an 80% viewport width and height for the registrar desktop scan preview. The change is scoped through a shared UI style owner; local Chromium verified WebP/PDF at 1680, 1366 and 1024 px, reviewer mode and unchanged 390 px geometry. Document data and workflow rules were unchanged.",
+      "verified_sha": "c7a51849b2925af490468871b4f3bec415626f17",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c7a51849b2925af490468871b4f3bec415626f17/tests/trip_completion_browser_test.mjs",
+      "verification_note": "2026-11-04: OWNER requested zoom in the registrar scan preview. WebP/JPEG/PNG/TIFF images now zoom by mouse wheel up to 4x within the scrollable desktop dialog; PDF retains native browser viewer zoom controls. Local Chromium verified zoom in/out and reviewer-mode regression. Phone behavior and document data were unchanged.",
       "owning_paths": [
         "app/Service/TripDocument*.php",
         "app/Service/TripCompletionService.php",

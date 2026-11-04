@@ -1,0 +1,19 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "logistics-scan-wheel-zoom-20261104",
+  "date": "2026-11-04",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "quote": "нужно сделать что бы зумм колесиком мышки раболал или как т еще прибавлять"
+  },
+  "scope": [
+    "/erpv2/company/logistics-assistant: existing uploaded-scan preview dialog on desktop"
+  ],
+  "shared_style_owner": "public/assets/css/erp-ui.css",
+  "approved": {
+    "interaction": "The mouse wheel over a loaded scan image increases or decreases its zoom between its fitted size and 4x while the dialog remains scrollable. Opening another scan resets the zoom.",
+    "pdf": "Keep the browser PDF viewer and its native zoom controls available inside the dialog.",
+    "retained": "No new visible controls or labels. Existing phone layout and /company/tn-review behavior remain unchanged."
+  }
+}
