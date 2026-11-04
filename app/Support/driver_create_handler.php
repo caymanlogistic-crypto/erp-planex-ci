@@ -88,19 +88,13 @@ if (!function_exists('handleCompanyDriverCreate')) {
             $localDb = new \App\Core\Database($localDbConfig);
             $localPdo = $localDb->connection();
 
-            try {
-                $localPdo->query("SELECT 1 FROM drivers LIMIT 1")->fetch();
-            } catch (\Exception $e) {
-                $migrationSql = file_get_contents(base_path('database/migrations-local/004_create_company_drivers.sql'));
-                $localPdo->exec($migrationSql);
-                }
-
-            try {
-                $localPdo->query("SELECT 1 FROM document_types LIMIT 1")->fetch();
-            } catch (\Exception $e) {
-                $localPdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));
-                $localPdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));
-            }
+            // Schema changes belong to numbered local migrations, never to an HTTP request.
+            // Check every dependency before inserting a driver so a missing table or column
+            // cannot leave a partially created entity behind.
+            $localPdo->query('SELECT id, full_name, created_by_user_id, created_by_role FROM drivers LIMIT 0');
+            $localPdo->query('SELECT id, name, code, entity_type, sort_order FROM document_types LIMIT 0');
+            $localPdo->query('SELECT driver_id, phone, is_main, comment, created_by_user_id, created_by_role FROM driver_phones LIMIT 0');
+            $localPdo->query('SELECT id, document_type_id, created_by_user_id, created_by_role FROM documents LIMIT 0');
 
             $docTypes = $localPdo->query("SELECT id, name, code, entity_type FROM document_types WHERE entity_type = 'driver' OR entity_type IS NULL ORDER BY sort_order, name")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -325,11 +319,6 @@ if (!function_exists('handleCompanyDriverCreate')) {
 
             $extraPhones = $_POST['extra_phones'] ?? [];
             if (is_array($extraPhones)) {
-                try {
-                    $localPdo->query("SELECT 1 FROM driver_phones LIMIT 1")->fetch();
-                } catch (\Exception $e) {
-                    $localPdo->exec(file_get_contents(base_path('database/migrations-local/015_create_driver_phones.sql')));
-                }
                 $phoneComments = $_POST['extra_phone_comments'] ?? [];
                 $phoneIns = $localPdo->prepare('INSERT INTO driver_phones (driver_id, phone, is_main, comment, created_by_user_id, created_by_role) VALUES (:did, :phone, 0, :comment, :uid, :role)');
                 foreach ($extraPhones as $pIdx => $extraPhone) {
@@ -350,17 +339,6 @@ if (!function_exists('handleCompanyDriverCreate')) {
                 $createdDriver['extra_phones'] = $extraPhonesSaved->fetchAll(PDO::FETCH_ASSOC);
             } else {
                 $createdDriver['extra_phones'] = [];
-            }
-
-            try {
-                $localPdo->query("SELECT 1 FROM documents LIMIT 1")->fetch();
-            } catch (\Exception $e) {
-                $localPdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql')));
-            }
-            try {
-                $localPdo->query("SELECT created_by_user_id FROM documents LIMIT 1")->fetch();
-            } catch (\Exception $e) {
-                $localPdo->exec("ALTER TABLE documents ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL");
             }
 
             $allowedExt = ['pdf', 'doc', 'docx', 'rtf', 'odt', 'xls', 'xlsx', 'csv', 'ods', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'heic', 'heif', 'txt'];
