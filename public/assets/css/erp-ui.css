@@ -1884,3 +1884,11 @@ td.is-dash {
   flex: 1;
   justify-content: center;
 }
+
+/* OWNER 2026-11-04: registrar scan preview uses 80% of the desktop viewport. */
+@media (min-width: 761px) {
+  .lab-scan-preview--registrar[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); box-sizing: border-box; width: 80vw; height: 80vh; max-width: none; max-height: none; }
+  .lab-scan-preview--registrar[open] .lab-scan-preview-body { box-sizing: border-box; min-height: 0; max-height: none; }
+  .lab-scan-preview--registrar[open] .lab-scan-preview-body img { max-height: 100%; }
+  .lab-scan-preview--registrar[open] .lab-scan-preview-body iframe { height: 100%; }
+}

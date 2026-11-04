@@ -1,0 +1,18 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "logistics-scan-preview-80pct-20261104",
+  "date": "2026-11-04",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "quote": "Нужно сделать так чтобы просмотр открввался на 80% ширины и васоты экрана"
+  },
+  "scope": [
+    "/erpv2/company/logistics-assistant: existing uploaded-scan preview dialog on desktop"
+  ],
+  "shared_style_owner": "public/assets/css/erp-ui.css",
+  "approved": {
+    "geometry": "Existing scan preview dialog occupies 80% of viewport width and height above 760px. The image or PDF frame fits inside the dialog body without overflowing the dialog.",
+    "retained": "Existing header, close control, colors, typography, image/PDF behavior and phone layout remain unchanged. The /company/tn-review dialog is outside this decision."
+  }
+}

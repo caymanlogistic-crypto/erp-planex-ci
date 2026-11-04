@@ -74,7 +74,7 @@
   };
 
   const preview = document.createElement('dialog');
-  preview.className = 'lab-scan-preview';
+  preview.className = reviewerMode ? 'lab-scan-preview' : 'lab-scan-preview lab-scan-preview--registrar';
   preview.innerHTML = '<div class="lab-scan-preview-head"><strong>Просмотр скана</strong><button type="button" aria-label="Закрыть просмотр">×</button></div><div class="lab-scan-preview-body"></div>';
   preview.querySelector('button').addEventListener('click', () => preview.close());
   document.body.append(preview);
