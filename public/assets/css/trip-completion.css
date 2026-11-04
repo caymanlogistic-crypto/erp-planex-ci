@@ -312,13 +312,6 @@
 .lab-scan-preview-body { min-height: 120px; max-height: calc(100vh - 100px); padding: 12px; overflow: auto; font-size: 12px; }
 .lab-scan-preview-body img { display: block; max-width: 100%; max-height: calc(100vh - 140px); margin: auto; }
 .lab-scan-preview-body iframe { display: block; width: 100%; height: min(70vh, 700px); border: 0; }
-@media (min-width: 761px) {
-  .lab-scan-preview[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); box-sizing: border-box; width: 80vw; height: 80vh; max-width: none; max-height: none; }
-  .lab-scan-preview-body { box-sizing: border-box; min-height: 0; max-height: none; }
-  .lab-scan-preview-body img { max-height: 100%; }
-  .lab-scan-preview-body iframe { height: 100%; }
-}
-
 @media (max-width: 1650px) {
   .logistics-workspace .logistics-request-row {
     grid-template-columns: minmax(190px, 1.15fr) minmax(190px, 1fr) minmax(165px, .8fr) minmax(138px, .7fr) minmax(214px, 1fr);
