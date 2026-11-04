@@ -129,6 +129,8 @@ try{
   await row.locator('[data-document-count]').filter({hasText:'2/2'}).waitFor({state:'attached'});
   await row.locator('.lab-docs-item').filter({hasText:'scan.webp'}).locator('.lab-docs-view').click();
   assert.equal(await page.locator('.lab-scan-preview-body img').count(),1,'WebP opens as an image');
+  const webpDialog=await page.locator('.lab-scan-preview').boundingBox();
+  assert.ok(Math.abs(webpDialog.width-1680*.8)<2 && Math.abs(webpDialog.height-1000*.8)<2,'desktop WebP preview occupies 80% of viewport width and height');
   await page.locator('.lab-scan-preview-head button').click();
   page.once('dialog',dialog=>dialog.accept());
   await row.locator('.lab-docs-item').filter({hasText:'scan.webp'}).locator('.lab-docs-remove').click();
@@ -137,6 +139,11 @@ try{
   await row.locator('[data-document-count]').filter({hasText:'2/2'}).waitFor({state:'attached'});
   await row.locator('.lab-docs-item').filter({hasText:'scan.pdf'}).locator('.lab-docs-view').click();
   assert.equal(await page.locator('.lab-scan-preview-body iframe').count(),1,'PDF opens in the preview frame');
+  const pdfDialog=await page.locator('.lab-scan-preview').boundingBox();
+  const pdfBody=await page.locator('.lab-scan-preview-body').boundingBox();
+  const pdfFrame=await page.locator('.lab-scan-preview-body iframe').boundingBox();
+  assert.ok(Math.abs(pdfDialog.width-1680*.8)<2 && Math.abs(pdfDialog.height-1000*.8)<2,'desktop PDF preview occupies 80% of viewport width and height');
+  assert.ok(pdfFrame.height>=pdfBody.height-25,'PDF frame fills the preview body');
   const pdfResponse=await page.request.get('http://127.0.0.1:'+server.address().port+'/download/'+documents.find(document=>document.download_name==='scan.pdf').id+'?preview=1');
   assert.equal(pdfResponse.headers()['x-frame-options'],'SAMEORIGIN','PDF preview permits a same-origin frame');
   await page.locator('.lab-scan-preview-head button').click();
@@ -150,6 +157,11 @@ try{
   for(const width of [1366,1024,390]){
     await page.setViewportSize({width,height:900});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,`${width}px has no horizontal overflow`);
+    await row.locator('.lab-docs-item').filter({hasText:'scan.pdf'}).locator('.lab-docs-view').click();
+    const resizedDialog=await page.locator('.lab-scan-preview').boundingBox();
+    if(width===390) assert.ok(Math.abs(resizedDialog.width-358)<2,`390px preview keeps its existing width (actual ${resizedDialog.width})`);
+    else assert.ok(Math.abs(resizedDialog.width-width*.8)<2 && Math.abs(resizedDialog.height-900*.8)<2,`${width}px preview remains 80% of viewport`);
+    await page.locator('.lab-scan-preview-head button').click();
   }
   assert.equal(errors.length,0,'page errors: '+errors.join('; '));
   const timeOnlyPage=await browser.newPage();
