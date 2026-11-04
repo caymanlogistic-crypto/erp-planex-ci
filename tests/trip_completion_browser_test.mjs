@@ -13,6 +13,7 @@ const timeOnlyHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'t
 let postCount=0;
 let lastSaveBody='';
 let documents=[];
+let nextDocumentId=300;
 const payload=()=>JSON.stringify({ok:true,request:{id:12,is_complete:false,documents},trip:{complete_count:1,request_count:3}});
 const server=http.createServer((req,res)=>{
   if(req.method==='POST'){
@@ -22,8 +23,9 @@ const server=http.createServer((req,res)=>{
     req.on('end',()=>{
       if(req.url?.endsWith('/requests/12')) lastSaveBody=Buffer.concat(body).toString('utf8');
       if(req.url?.endsWith('/documents')){
-        const id=300+documents.length+1;
-        documents.push({id,download_name:`Рейс_244_Заявка_275006_ТН_0${documents.length+1}.jpg`,download_url:`/download/${id}`,delete_url:`/delete/${id}`});
+        const id=++nextDocumentId;
+        const filename=Buffer.concat(body).toString('utf8').match(/filename="([^"]+)"/)?.[1] || 'scan.jpg';
+        documents.push({id,download_name:filename,download_url:`/download/${id}`,delete_url:`/delete/${id}`});
       }
       if(req.url?.startsWith('/delete/')){
         const id=Number(req.url.slice('/delete/'.length));
@@ -34,7 +36,13 @@ const server=http.createServer((req,res)=>{
   }
   if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html);}
   if(req.url==='/time-only'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(timeOnlyHtml);}
-  if(req.url?.startsWith('/download/')){res.setHeader('Content-Type','image/jpeg');return res.end('test');}
+  if(req.url?.startsWith('/download/')){
+    const id=Number(req.url.match(/^\/download\/(\d+)/)?.[1]);
+    const name=documents.find(document=>document.id===id)?.download_name || '';
+    res.setHeader('Content-Type',name.endsWith('.pdf')?'application/pdf':name.endsWith('.webp')?'image/webp':'image/jpeg');
+    res.setHeader('X-Frame-Options',name.endsWith('.pdf')?'SAMEORIGIN':'DENY');
+    return res.end(name.endsWith('.pdf')?'%PDF-1.4\n%%EOF':'test');
+  }
   const file=path.resolve(root,'public','.'+req.url.split('?')[0]);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
   res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':'application/octet-stream');
@@ -117,6 +125,21 @@ try{
   page.once('dialog',dialog=>dialog.accept());
   await row.locator('.lab-docs-remove').first().click();
   await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({state:'attached',timeout:3000}).catch(async()=>{throw new Error('Delete not reflected: '+JSON.stringify({postCount,documents,label:await row.locator('[data-save-label]').textContent(),count:await row.locator('[data-document-count]').textContent(),errors}));});
+  await fileInput.setInputFiles({name:'scan.webp',mimeType:'image/webp',buffer:Buffer.from('webp-test')});
+  await row.locator('[data-document-count]').filter({hasText:'2/2'}).waitFor({state:'attached'});
+  await row.locator('.lab-docs-item').filter({hasText:'scan.webp'}).locator('.lab-docs-view').click();
+  assert.equal(await page.locator('.lab-scan-preview-body img').count(),1,'WebP opens as an image');
+  await page.locator('.lab-scan-preview-head button').click();
+  page.once('dialog',dialog=>dialog.accept());
+  await row.locator('.lab-docs-item').filter({hasText:'scan.webp'}).locator('.lab-docs-remove').click();
+  await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({state:'attached'});
+  await fileInput.setInputFiles({name:'scan.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n%%EOF')});
+  await row.locator('[data-document-count]').filter({hasText:'2/2'}).waitFor({state:'attached'});
+  await row.locator('.lab-docs-item').filter({hasText:'scan.pdf'}).locator('.lab-docs-view').click();
+  assert.equal(await page.locator('.lab-scan-preview-body iframe').count(),1,'PDF opens in the preview frame');
+  const pdfResponse=await page.request.get('http://127.0.0.1:'+server.address().port+'/download/'+documents.find(document=>document.download_name==='scan.pdf').id+'?preview=1');
+  assert.equal(pdfResponse.headers()['x-frame-options'],'SAMEORIGIN','PDF preview permits a same-origin frame');
+  await page.locator('.lab-scan-preview-head button').click();
   await page.locator('input[name="q"]').fill('275006');
   assert.equal(await page.locator('.logistics-trip:not([hidden])').count(),1,'search works without submit button');
   assert.equal(await page.locator('.logistics-trip:not([hidden]) .logistics-request-row:not([hidden])').count(),1,'matching request remains visible');

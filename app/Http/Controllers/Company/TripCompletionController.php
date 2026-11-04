@@ -342,6 +342,10 @@ final class TripCompletionController
             [, $service]=$this->context();$this->assertReady($service);$this->visibleTrip($service,(int)$tripId);$document=$service->document((int)$tripId,(int)$documentId);$path=$service->absoluteDocumentPath($document);
             header('Content-Type: '.(string)$document['mime_type']);header('Content-Length: '.filesize($path));
             $disposition=isset($_GET['preview'])?'inline':'attachment';
+            if ($disposition==='inline' && strtolower((string)$document['mime_type'])==='application/pdf') {
+                header('X-Frame-Options: SAMEORIGIN');
+                header("Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
+            }
             header("Content-Disposition: {$disposition}; filename*=UTF-8''".rawurlencode(DocumentService::safeDownloadName((string)$document['download_name'])));
             readfile($path);
         } catch (Throwable) { http_response_code(404);header('Content-Type: text/plain; charset=utf-8');echo 'Файл не найден.'; }
