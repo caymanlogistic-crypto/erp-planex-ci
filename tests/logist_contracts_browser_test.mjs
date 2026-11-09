@@ -75,6 +75,32 @@ try{
   await scrollPage.waitForSelector('[data-registry-ready="true"]');
   await assertRegistryScroll(scrollPage,'logist-contracts populated scroll');
   await scrollPage.close();
+  const executorPage=await browser.newPage({viewport:{width:1280,height:900}});
+  const duplicateExecutors=[
+    {crew_id:11,contractor_name:'ИП Шашкина',driver_full_name:'Шашкин Максим Владимирович',primary_plate:'А111АА77'},
+    {crew_id:22,contractor_name:'ИП Шашкина',driver_full_name:'Шашкин Максим Владимирович',primary_plate:'В222ВВ77'},
+  ];
+  const trip={id:9,business_id:420,comment:'Ставрополь',route_executor_id:22,planned_start_date:'2026-11-10'};
+  const submitted=[];
+  await executorPage.route('**/company/logistics/contracts/prepare',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,trips:[trip,{...trip,id:10,business_id:421,route_executor_id:null}],executors:duplicateExecutors})}));
+  await executorPage.route('**/company/logistics/contracts/create',route=>{
+    submitted.push(route.request().postData().match(/name="route_executor_id"\s+(\d+)/)?.[1]);
+    return route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({ok:false,message:'Проверка отправки'})});
+  });
+  await executorPage.goto(`${origin}/company/logistics/contracts?role=logist`);
+  await executorPage.locator('[data-create]').click();
+  await executorPage.locator('#lc-trip').fill('#420 — Ставрополь');
+  assert.match(await executorPage.locator('#lc-executor').inputValue(),/В222ВВ77.*#22$/);
+  await executorPage.locator('#lc-rate').fill('150000');
+  await executorPage.locator('[data-form] [type="submit"]').click();
+  assert.deepEqual(submitted,['22'],'assigned executor ID must survive duplicate names');
+  await executorPage.locator('#lc-trip').fill('#421 — Ставрополь');
+  const manualChoice=await executorPage.locator('#lc-executors option').nth(1).getAttribute('value');
+  await executorPage.locator('#lc-executor').fill(manualChoice);
+  await executorPage.locator('#lc-rate').fill('150000');
+  await executorPage.locator('[data-form] [type="submit"]').click();
+  assert.deepEqual(submitted,['22','22'],'manual duplicate choice must submit its own ID');
+  await executorPage.close();
   console.log('REGISTRY_RUNTIME_PAGE=logist-contracts');
   console.log('LOGIST_CONTRACTS_BROWSER=PASS');
 }finally{await browser.close();server.close();}
