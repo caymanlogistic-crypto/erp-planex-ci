@@ -13,7 +13,7 @@
   const formatDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value.slice(8,10)+'.'+value.slice(5,7)+'.'+value.slice(0,4) : '—';
   const plusSeven = value => { const d = new Date(value+'T12:00:00'); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); };
   const rows = JSON.parse(root.querySelector('[data-initial-rows]').textContent || '[]');
-  let trips = [], executors = [], current = null;
+  let trips = [], executors = [], current = null, assignedExecutorId = null;
   const formError = root.querySelector('[data-form-error]');
   const pageError = root.querySelector('[data-page-error]');
   const detailError = root.querySelector('[data-detail-error]');
@@ -75,16 +75,25 @@
     window.PlanexRegistry?.textRoles(root);
   }
   function tripLabel(trip) { return '#' + trip.business_id + ' — ' + (trip.comment || trip.client_name || 'Рейс'); }
-  function executorLabel(executor) { return [executor.contractor_name,executor.driver_full_name].filter(Boolean).join(' — '); }
+  function executorLabel(executor) {
+    const name = [executor.contractor_name,executor.driver_full_name].filter(Boolean).join(' — ');
+    const duplicates = executors.filter(item => [item.contractor_name,item.driver_full_name].filter(Boolean).join(' — ') === name);
+    return duplicates.length > 1 ? `${name} · ${executor.primary_plate || 'без госномера'} · #${executor.crew_id}` : name;
+  }
   function selectedTrip() { return trips.find(trip => tripLabel(trip) === form.elements.trip_choice.value); }
-  function selectedExecutor() { return executors.find(executor => executorLabel(executor) === form.elements.executor_choice.value); }
+  function selectedExecutor() {
+    if (assignedExecutorId !== null) return executors.find(executor => Number(executor.crew_id) === assignedExecutorId);
+    return executors.find(executor => executorLabel(executor) === form.elements.executor_choice.value);
+  }
   function fillFromTrip() {
     const trip = selectedTrip();
-    if (!trip) { form.elements.start_date.value = ''; form.elements.finish_date.value = ''; return; }
+    assignedExecutorId = null;
+    if (!trip) { form.elements.start_date.value = ''; form.elements.finish_date.value = ''; form.elements.executor_choice.readOnly = false; return; }
     const start = String(trip.actual_start_date || trip.planned_start_date || trip.planned_start_date_from || '').slice(0,10);
     form.elements.start_date.value = start;
     form.elements.finish_date.value = start ? plusSeven(start) : '';
     const assigned = executors.find(executor => Number(executor.crew_id) === Number(trip.route_executor_id));
+    if (assigned) assignedExecutorId = Number(assigned.crew_id);
     form.elements.executor_choice.value = assigned ? executorLabel(assigned) : '';
     form.elements.executor_choice.readOnly = !!assigned;
     form.elements.price.value = '';
@@ -93,6 +102,7 @@
     pageError.hidden = true; pageError.classList.add('is-hidden');
     formError.hidden = true;
     form.reset();
+    assignedExecutorId = null;
     const button = root.querySelector('[data-create]');
     button.disabled = true;
     try {
