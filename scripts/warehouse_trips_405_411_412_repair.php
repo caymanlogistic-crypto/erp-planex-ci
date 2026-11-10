@@ -72,7 +72,7 @@ try {
             $q = $tenant->prepare('SELECT wt.id,wt.business_id,wt.status,wt.legacy_flight_id,fr.zayavka_id,wtr.snapshot_mass_kg FROM waste_trips wt JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.removed_at IS NULL JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wt.business_id=? AND wt.deleted_at IS NULL ORDER BY wtr.position_no,wtr.id');
             $q->execute([$id]);
             $erp[$id] = $q->fetchAll();
-            if (!$erp[$id] || array_unique(array_column($erp[$id], 'id')) !== [(string)$erp[$id][0]['id']]
+            if (!$erp[$id] || array_values(array_unique(array_map('strval', array_column($erp[$id], 'id')))) !== [(string)$erp[$id][0]['id']]
                 || (int)$erp[$id][0]['legacy_flight_id'] !== $id) throw new RuntimeException('ERP trip mismatch: '.$id);
         }
         $ids = static fn(string $raw): array => \App\Service\WasteTripLegacySourceService::parseRequestIdsStrict($raw);
@@ -117,7 +117,7 @@ try {
             || !in_array((int)$flights[412]['source_warehouse_id'], [0,$warehouseIds[412]], true)) {
             throw new RuntimeException('Source warehouse mismatch.');
         }
-        $q = $legacy->prepare('SELECT id,name FROM '.$table('warehouses').' WHERE id IN (?,?)'.$suffix);
+        $q = $legacy->prepare('SELECT id,name FROM '.$table('warehouses').' WHERE id IN (?,?) ORDER BY id'.$suffix);
         $q->execute([$warehouseIds[405],$warehouseIds[412]]);
         $warehouseNames = array_column($q->fetchAll(), 'name', 'id');
         if (count($warehouseNames) !== 2 || !str_contains(mb_strtoupper((string)$warehouseNames[$warehouseIds[405]]), 'КРАСНОЯРСК')
@@ -126,7 +126,9 @@ try {
         }
         foreach ([405,412] as $id) {
             if (!in_array((string)$flights[$id]['route_type'], ['generator_to_utilizer','mixed_to_utilizer'], true)
-                || ($flights[$id]['route_type'] === 'mixed_to_utilizer' && array_diff($ids((string)$flights[$id]['direct_zayavki_ids']), $direct[$id]))) {
+                || ($flights[$id]['route_type'] === 'mixed_to_utilizer' && (
+                    array_diff($ids((string)$flights[$id]['direct_zayavki_ids']), $direct[$id])
+                    || array_diff($direct[$id], $ids((string)$flights[$id]['direct_zayavki_ids']))))) {
                 throw new RuntimeException('Unexpected route state: '.$id);
             }
         }
