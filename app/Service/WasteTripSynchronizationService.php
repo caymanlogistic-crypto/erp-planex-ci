@@ -12,6 +12,37 @@ use Throwable;
 final class WasteTripSynchronizationService
 {
     private static bool $contractPreparationActive = false;
+    private static bool $routeExecutorPickerActive = false;
+
+    public static function runForRouteExecutorPicker(PDO $legacy, PDO $tenant, PDO $central, int $companyId, array $actor): array
+    {
+        $access = AccessRuntime::current();
+        $membershipId = $access->membershipId();
+        $role = (string)($actor['role_code'] ?? '');
+        if (!in_array($role, ['company_owner', 'logist', 'senior_logist', 'custom_role'], true)
+            || (int)($actor['user_id'] ?? 0) <= 0 || !$access->isActive()
+            || $access->companyId() !== $companyId
+            || !$access->canAccessPage('company.route_executors')
+            || $membershipId === null || $membershipId <= 0
+            || self::$routeExecutorPickerActive || self::$contractPreparationActive) {
+            throw new RuntimeException('Синхронизация рейсов недоступна.');
+        }
+        $identity = $tenant->prepare('SELECT id FROM users WHERE membership_id=? LIMIT 2');
+        $identity->execute([$membershipId]);
+        if (array_map('intval', $identity->fetchAll(PDO::FETCH_COLUMN)) !== [(int)$actor['user_id']]) {
+            throw new RuntimeException('Синхронизация рейсов недоступна текущему сотруднику.');
+        }
+        $scopes = array_fill_keys(['client','contractor','vehicle_unit','driver','linear_trip','waste_trip'], 'all');
+        self::$routeExecutorPickerActive = true;
+        AccessRuntime::setCurrent(EffectiveAccess::member($membershipId, $companyId, ['company.route_executors'=>true], $scopes, $role));
+        try {
+            return self::run($legacy, $tenant, $central, $companyId,
+                ['user_id'=>(int)$actor['user_id'], 'role_code'=>'route_picker_sync'], true);
+        } finally {
+            AccessRuntime::setCurrent($access);
+            self::$routeExecutorPickerActive = false;
+        }
+    }
 
     public static function runForContractPreparation(PDO $legacy, PDO $tenant, PDO $central, int $companyId, array $actor): array
     {
@@ -51,10 +82,16 @@ final class WasteTripSynchronizationService
         return self::$contractPreparationActive;
     }
 
-    public static function run(PDO $legacy, PDO $tenant, PDO $central, int $companyId, array $actor): array
+    public static function routeExecutorPickerActive(): bool
+    {
+        return self::$routeExecutorPickerActive;
+    }
+
+    public static function run(PDO $legacy, PDO $tenant, PDO $central, int $companyId, array $actor, bool $missingOnly = false): array
     {
         if (($actor['role_code'] ?? '') !== 'company_owner'
-            && !(self::$contractPreparationActive && ($actor['role_code'] ?? '') === 'logist_contract_sync')) {
+            && !(self::$contractPreparationActive && ($actor['role_code'] ?? '') === 'logist_contract_sync')
+            && !(self::$routeExecutorPickerActive && $missingOnly && ($actor['role_code'] ?? '') === 'route_picker_sync')) {
             throw new RuntimeException('Синхронизация доступна руководителю компании.');
         }
         RegulatedDataScopeService::assertCanCreate('waste_trip');
@@ -101,6 +138,7 @@ final class WasteTripSynchronizationService
             $result = ['source_count'=>count($flights),'created'=>0,'updated'=>0,'deleted'=>0,'skipped'=>0,'failed'=>0,'warnings'=>[],'errors'=>[]];
             $existing = $tenant->query("SELECT * FROM waste_trips WHERE source_system IN ('legacy_flights','legacy_prefill','legacy_sync') AND legacy_flight_id > 225 ORDER BY business_id")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($existing as $trip) {
+                if ($missingOnly) continue;
                 if (isset($ids[(int)$trip['legacy_flight_id']]) || !empty($trip['deleted_at'])) continue;
                 try {
                     WasteTripService::deleteMissingLegacyTrip($tenant, (int)$trip['id'], $actor);
@@ -111,6 +149,7 @@ final class WasteTripSynchronizationService
             }
             foreach ($flights as $flight) {
                 $id = (int)$flight['id'];
+                if ($missingOnly && self::hasLegacyIdentity($existing, $id)) { $result['skipped']++; continue; }
                 try {
                     $state = WasteTripLegacyMappingService::state($flight);
                     $state += WasteTripLegacyMetadataService::fromFlight($flight);
@@ -137,6 +176,12 @@ final class WasteTripSynchronizationService
             $release = $tenant->prepare('SELECT RELEASE_LOCK(?)');
             $release->execute([$lockName]);
         }
+    }
+
+    private static function hasLegacyIdentity(array $existing, int $id): bool
+    {
+        foreach ($existing as $trip) if ((int)$trip['legacy_flight_id'] === $id) return true;
+        return false;
     }
 
     private static function executorCandidates(PDO $pdo, array $actor): array

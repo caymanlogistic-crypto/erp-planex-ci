@@ -248,6 +248,7 @@
   window.openCombinedRouteExecutorCreate = function () {
     arrangeForms();
     window.openModal('route-executor-create-modal');
+    window.synchronizeMissingRouteExecutorTrips?.();
     document.querySelector('#lab-contractor-form [name="name"]')?.focus();
   };
 

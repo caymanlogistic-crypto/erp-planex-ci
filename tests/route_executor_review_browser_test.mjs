@@ -15,6 +15,7 @@ try {
   const page = await context.newPage();
   const errors = [];
   const sends = [];
+  let syncCalls = 0;
   let currentCardId = null;
   let currentStage = 'new';
   let contractSent = false;
@@ -23,7 +24,13 @@ try {
   await page.route('http://127.0.0.1:59999/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/review/status')) return route.fulfill({ json: { ok: true, stage: 'new', contract_status: contractSent ? 'accepted' : 'not_sent', card: null } });
-    if (path.endsWith('/review/config') && new URL(route.request().url()).searchParams.has('trip_search')) return route.fulfill({ json: { ok: true, trips: [{ id: 123, label: '#123 Вывоз отходов' }] } });
+    if (path.endsWith('/review/synchronize-missing-trips')) {
+      syncCalls++;
+      assert.equal(route.request().method(), 'POST');
+      assert.equal(route.request().headers()['x-csrf-token'], 'test-csrf-token');
+      return route.fulfill({ json: { ok: true, sync: { created: 1, failed: 0, errors: [] } } });
+    }
+    if (path.endsWith('/review/config') && new URL(route.request().url()).searchParams.has('trip_search')) return route.fulfill({ json: { ok: true, trips: [{ id: 123, label: '#123 Вывоз отходов' }, ...(syncCalls ? [{ id: 430, label: '#430 Новый рейс' }] : [])] } });
     if (path.endsWith('/review/config')) return route.fulfill({ json: { ok: true, sender: 'sender@example.test', author: 'Отправитель', recipients: ['info@plan-ex.ru'], send_responsible_logist: false,
       max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: '🚚 Внесены частичные данные\n**{{trip}}**\n{{vehicle_driver}}\n\n**Не хватает для полного комплекта**\n{{missing}}\nЛогист: {{responsible}}' },
         'route_executor.full': { enabled: true, chat_config_id: 1, template: '🚛 ПОЛНЫЙ КОМПЛЕКТ\n**{{trip}}**\n{{vehicle_driver}}\nЛогист: {{responsible}}' } } } });
@@ -75,6 +82,9 @@ try {
       </div>
     </div>`);
   await page.addScriptTag({ content: script });
+  await page.evaluate(() => window.synchronizeMissingRouteExecutorTrips());
+  assert.equal(syncCalls, 1, 'Opening the card synchronizes missing trips once');
+  assert.equal(await page.locator('#route-executor-trip-options option[value="#430 Новый рейс"]').count(), 1, 'New trip appears in the picker after synchronization');
   await page.evaluate(() => {
     window.closeModal = id => document.getElementById(id)?.classList.remove('is-open');
     window.openModal = id => document.getElementById(id)?.classList.add('is-open');
