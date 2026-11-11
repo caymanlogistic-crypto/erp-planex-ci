@@ -102,7 +102,7 @@ try {
         check(\App\Service\LinearRouteService::fetchVisibleClients($pdo,['user_id'=>1,'role_code'=>'logist'])===[],'Logist does not see the sync customer');
         reject(static fn()=>Sync::run($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'company_owner']),'Spoofed owner role must not override ambient data scope');
         $prepared=Sync::runForContractPreparation($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'logist']);
-        check($prepared['failed']===0&&$prepared['created']===2,'Contract preparation reconciles with bounded reference scope');
+        check($prepared['failed']===0&&$prepared['created']===2,'Contract preparation reconciles with bounded reference scope: '.json_encode($prepared,JSON_UNESCAPED_UNICODE));
         check(\App\Security\AccessRuntime::current()===$restricted,'Original logist access restored after synchronization');
         check(\App\Service\LinearRouteService::fetchVisibleClients($pdo,['user_id'=>1,'role_code'=>'logist'])===[],'Sync customer remains hidden to logist');
         check((string)$pdo->query("SELECT actor_role FROM waste_trip_audit_log ORDER BY id DESC LIMIT 1")->fetchColumn()==='logist_contract_sync','Synchronization audit does not impersonate owner');
@@ -445,6 +445,24 @@ try {
     $cancelledId=(int)$pdo->lastInsertId();
     Trips::delete($pdo,$cancelledId,(int)Trips::fetchTrip($pdo,$cancelledId)['lock_version'],$actor);
     check(Trips::fetchTrip($pdo,$cancelledId)===null,'Cancelled independent trip can be deleted');
+    $pdo->exec("INSERT INTO fixture_flights(id,zayavki_ids,comment,status,cost,assigned_manager_id,unload_type) VALUES(430,'700001','Picker source','planned_route',100,3,'SKLAD')");
+    $pickerAccess=\App\Security\EffectiveAccess::member(1,25,['company.route_executors'=>true],['client'=>'none','contractor'=>'none','vehicle_unit'=>'none','driver'=>'none','linear_trip'=>'none','waste_trip'=>'none'],'logist');
+    \App\Security\AccessRuntime::setCurrent($pickerAccess);
+    try {
+        $picker=static fn()=>Sync::runForRouteExecutorPicker($legacy,$pdo,$central,25,['user_id'=>1,'role_code'=>'logist']);
+        $firstPicker=$picker();
+        check($firstPicker['created']===1&&$firstPicker['deleted']===0&&$firstPicker['updated']===0,'Picker adds only the missing flight: '.json_encode($firstPicker,JSON_UNESCAPED_UNICODE));
+        check(\App\Security\AccessRuntime::current()===$pickerAccess,'Picker restores original access');
+        check((int)$pdo->query('SELECT created_by_membership_id FROM waste_trips WHERE business_id=430')->fetchColumn()===10,'Imported flight belongs to assigned manager');
+        $pdo->exec("UPDATE fixture_flights SET comment='Changed source' WHERE id=430");
+        $secondPicker=$picker();
+        check($secondPicker['created']===0&&$secondPicker['updated']===0&&$secondPicker['deleted']===0,'Reopening does not update or delete existing flights');
+        check((string)$pdo->query('SELECT comment FROM waste_trips WHERE business_id=430')->fetchColumn()==='Picker source','Existing ERP trip remains unchanged');
+        check(Trips::fetchTrip($pdo,$other)===null,'Manually removed trip remains removed');
+        $legacy->failRead=true;
+        reject($picker,'Unavailable source must not be treated as an empty source');
+        $legacy->failRead=false;
+    } finally { \App\Security\AccessRuntime::clear(); }
     echo "WASTE_TRIP_MANUAL_SALE_SYNC=PASS\n";
     echo "WASTE_TRIP_SYNCHRONIZATION_MYSQL=PASS\n";
 } finally {

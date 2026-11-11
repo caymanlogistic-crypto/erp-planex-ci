@@ -16,6 +16,8 @@ require_once base_path('app/Service/RouteExecutorReviewArchive.php');
 require_once base_path('app/Service/RouteExecutorReviewEmail.php');
 require_once base_path('app/Service/RouteExecutorReviewMaxMessage.php');
 require_once base_path('app/Service/RouteExecutorContractMailService.php');
+require_once base_path('app/Service/WasteTripLegacySourceService.php');
+require_once base_path('app/Service/WasteTripSynchronizationService.php');
 require_once base_path('app/Http/Controllers/Company/RouteExecutorReviewController.php');
 
 $controller = new \App\Http\Controllers\Company\RouteExecutorController($config, $db);
@@ -26,6 +28,7 @@ $router->get('/company/route-executors', [$controller, 'index'], $routeExecutors
 $router->get('/company/route-executors/create', [$controller, 'createForm'], $routeExecutorsPage);
 $router->post('/company/route-executors/create', [$controller, 'createSubmit'], $routeExecutorsPage);
 $router->get('/company/route-executors/review/config', [$reviewController, 'config'], $routeExecutorsPage);
+$router->post('/company/route-executors/review/synchronize-missing-trips', [$reviewController, 'synchronizeMissingTrips'], $routeExecutorsPage);
 $router->get('/company/route-executors/review/status', [$reviewController, 'status'], $routeExecutorsPage);
 $router->get('/company/route-executors/review/existing', [$reviewController, 'existing'], $routeExecutorsPage);
 $router->post('/company/route-executors/review/send', [$reviewController, 'send'], $routeExecutorsPage);

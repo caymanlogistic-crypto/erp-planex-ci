@@ -23,6 +23,8 @@ use App\Service\RouteExecutorReviewMaxMessage;
 use App\Service\RouteExecutorReviewPackage;
 use App\Service\RouteExecutorReviewRecipientService;
 use App\Service\RegulatedDataScopeService;
+use App\Service\WasteTripLegacySourceService;
+use App\Service\WasteTripSynchronizationService;
 use DomainException;
 use PDO;
 use PDOException;
@@ -54,6 +56,34 @@ final class RouteExecutorReviewController
                 'id'=>(int)$row['business_id'],'label'=>self::tripLabel($row),
             ],$q->fetchAll(PDO::FETCH_ASSOC))]);
         } catch (Throwable $error) { $this->failure($error); }
+    }
+
+    public function synchronizeMissingTrips(): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            verifyCsrfRequest();
+            [$company,$central,$tenant]=$this->context();
+            $access=AccessRuntime::current();
+            $membershipId=$access->membershipId();
+            if ($membershipId===null || !$access->canAccessPage('company.route_executors')) {
+                throw new DomainException('Синхронизация рейсов недоступна.');
+            }
+            $user=$tenant->prepare('SELECT id FROM users WHERE membership_id=? LIMIT 1');
+            $user->execute([$membershipId]);
+            $userId=(int)$user->fetchColumn();
+            $legacy=WasteTripLegacySourceService::connectionFromEnvironment();
+            if (!$legacy) throw new DomainException('Источник рейсов недоступен.');
+            $result=WasteTripSynchronizationService::runForRouteExecutorPicker(
+                $legacy,$tenant,$central,(int)$company['id'],
+                ['user_id'=>$userId,'role_code'=>$access->compatibilityRoleCode()]
+            );
+            $this->json(['ok'=>true,'sync'=>$result]);
+        } catch (Throwable $error) {
+            error_log('route executor trip synchronization: '.$error->getMessage());
+            $this->json(['ok'=>false,'error'=>$error instanceof DomainException ? $error->getMessage() : 'Не удалось синхронизировать рейсы.'],
+                $error instanceof DomainException ? 422 : 500);
+        }
     }
 
     private static function tripLabel(array $row): string

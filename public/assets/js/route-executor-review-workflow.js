@@ -7,6 +7,7 @@
   let fillingIndividual = false;
   let tripSearchTimer = null;
   let tripSearchSerial = 0;
+  let tripSyncPromise = null;
   const tripChoices = new Map();
 
   function bindTripPicker() {
@@ -42,7 +43,27 @@
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     input.addEventListener('focus', search);
+    window.refreshRouteExecutorTripChoices = search;
   }
+
+  window.synchronizeMissingRouteExecutorTrips = function () {
+    if (tripSyncPromise) return tripSyncPromise;
+    tripSyncPromise = (async () => {
+      try {
+        const response = await fetch(base + '/company/route-executors/review/synchronize-missing-trips', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось синхронизировать рейсы.');
+        await window.refreshRouteExecutorTripChoices?.();
+        if (result.sync.failed) showWorkflowMessage('Не все рейсы добавлены: ' + result.sync.errors.join(' '));
+      } catch (error) {
+        showWorkflowMessage('Не удалось обновить список рейсов: ' + error.message);
+      } finally { tripSyncPromise = null; }
+    })();
+    return tripSyncPromise;
+  };
 
   function flashReadiness(item) {
     item.classList.remove('lab-readiness-pulse');
