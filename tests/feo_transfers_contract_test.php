@@ -18,6 +18,9 @@ expectTransfer(FeoTransferService::parseIds('123456, 123456, 123456')['duplicate
 rejectTransfer(fn()=>FeoTransferService::parseIds('1234567'));
 rejectTransfer(fn()=>FeoTransferService::parseIds(''));
 $response=static function(string $precision,string $position='37.123 55.456'): string { return json_encode(['response'=>['GeoObjectCollection'=>['featureMember'=>[['GeoObject'=>['Point'=>['pos'=>$position],'metaDataProperty'=>['GeocoderMetaData'=>['text'=>'Найденный адрес','precision'=>$precision,'kind'=>'house']]]]]]]]); };
+$requestUrl=null;
+(new YandexGeocodingService('test',static function(string $url) use (&$requestUrl,$response): string { $requestUrl=$url; return $response('exact'); }))->geocode('Адрес');
+expectTransfer(parse_url($requestUrl,PHP_URL_SCHEME)==='https' && parse_url($requestUrl,PHP_URL_HOST)==='geocode-maps.yandex.ru' && parse_url($requestUrl,PHP_URL_PATH)==='/v1/','Current Geocoder API endpoint');
 foreach (['exact','number','near','range','street','other','unknown'] as $precision) {
     $service=new YandexGeocodingService('test',static fn($url)=>$response($precision));
     $r=$service->geocode('Адрес');

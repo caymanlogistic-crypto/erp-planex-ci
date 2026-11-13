@@ -29,7 +29,7 @@ final class YandexGeocodingService
         $address = trim($address);
         if ($address === '' || mb_strlen($address) > 1000) throw new RuntimeException('Введите адрес длиной до 1000 символов.');
         if ($this->apiKey === '') throw new RuntimeException('Ключ Яндекс Геокодера ещё не настроен. Обратитесь к руководителю.');
-        $url = 'https://geocode-maps.yandex.ru/1.x/?' . http_build_query(['format'=>'json','apikey'=>$this->apiKey,'geocode'=>$address,'lang'=>'ru_RU','results'=>1]);
+        $url = 'https://geocode-maps.yandex.ru/v1/?' . http_build_query(['format'=>'json','apikey'=>$this->apiKey,'geocode'=>$address,'lang'=>'ru_RU','results'=>1]);
         if ($this->transport !== null) {
             $body = ($this->transport)($url);
         } else {
