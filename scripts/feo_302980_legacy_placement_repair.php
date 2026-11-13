@@ -23,6 +23,7 @@ try {
     require_once $root.'/app/Support/crypto_helper.php';
     require_once $root.'/app/Support/company_database.php';
     require_once $root.'/app/Service/FeoLegacyImportSync.php';
+    require_once $root.'/app/Service/FeoPlacementService.php';
     require_once $root.'/app/Service/FeoLegacyParityService.php';
     $connect = static fn(array $db): PDO => new PDO(
         'mysql:host='.$db['host'].';port='.($db['port'] ?? 3306).';dbname='.$db['database'].';charset=utf8mb4',
