@@ -38,7 +38,8 @@ final class YandexGeocodingService
             $body = curl_exec($curl);
             $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
             curl_close($curl);
-            if ($body === false || $status !== 200) throw new RuntimeException('Яндекс Геокодер недоступен. Проверьте ключ и лимиты запросов или повторите позже.');
+            if ($body === false) throw new RuntimeException('Нет соединения с Яндекс Геокодером. Повторите позже.');
+            if ($status !== 200) throw new RuntimeException('Яндекс Геокодер вернул HTTP '.$status.'. Проверьте ключ и ограничения доступа или повторите позже.');
         }
         try { $data = json_decode((string)$body, true, 64, JSON_THROW_ON_ERROR); }
         catch (\JsonException) { throw new RuntimeException('Некорректный ответ Яндекс Геокодера.'); }
