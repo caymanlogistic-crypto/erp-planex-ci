@@ -250,9 +250,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ee01a1a6b0eee58c1dc4dd0298b967dd578a07c3",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ee01a1a6b0eee58c1dc4dd0298b967dd578a07c3/tests/feo_transfers_activation_mysql_test.php",
-      "verification_note": "2026-10-26: shared access test covers returned weight archive and isolation; transfer access/MySQL contracts PASS. Transfer activation test now expects the current weight standard variable `standard_changes` and preserves MAX routing/notify choice; focused activation MySQL PASS. Shared trip warning selection is reused for weight without changing transfer output.",
+      "verified_sha": "9485fa28eee9407987a468765f79075c131a92eb",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9485fa28eee9407987a468765f79075c131a92eb/tests/feo_transfers_contract_test.php",
+      "verification_note": "2026-11-13: server-side Yandex Geocoder now sends the ERP Referer matching the allowed plan-ex.ru domain; PHP syntax, focused FEO transfer contract and diff check PASS. The two FEO pages share this geocoder. Prior transfer access/MySQL and activation evidence remains valid for unaffected behavior.",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
