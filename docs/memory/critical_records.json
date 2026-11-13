@@ -250,9 +250,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9485fa28eee9407987a468765f79075c131a92eb",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9485fa28eee9407987a468765f79075c131a92eb/tests/feo_transfers_contract_test.php",
-      "verification_note": "2026-11-13: server-side Yandex Geocoder now sends the ERP Referer matching the allowed plan-ex.ru domain; PHP syntax, focused FEO transfer contract and diff check PASS. The two FEO pages share this geocoder. Prior transfer access/MySQL and activation evidence remains valid for unaffected behavior.",
+      "verified_sha": "51460cfbc92ff1b492ef35111aa84b0409e74839",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/51460cfbc92ff1b492ef35111aa84b0409e74839/tests/feo_transfers_contract_test.php",
+      "verification_note": "2026-11-13: server-side Yandex Geocoder sends the ERP Referer and reports HTTP status without exposing the API key or provider body. PHP syntax, focused FEO transfer contract and diff check PASS. Both FEO pages share this geocoder. Prior transfer access/MySQL and activation evidence remains valid for unaffected behavior.",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
