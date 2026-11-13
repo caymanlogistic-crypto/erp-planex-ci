@@ -7,6 +7,8 @@ use RuntimeException;
 /** Geographic values here always use their actual meaning, independently of FEO storage. */
 final class YandexGeocodingService
 {
+    private const REFERER = 'https://plan-ex.ru/erpv2/';
+
     public function __construct(private readonly string $apiKey, private readonly ?\Closure $transport = null) {}
 
     public static function precisionLabel(string $precision): string
@@ -32,7 +34,7 @@ final class YandexGeocodingService
             $body = ($this->transport)($url);
         } else {
             $curl = curl_init($url);
-            curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS]);
+            curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,CURLOPT_REFERER=>self::REFERER]);
             $body = curl_exec($curl);
             $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
             curl_close($curl);
